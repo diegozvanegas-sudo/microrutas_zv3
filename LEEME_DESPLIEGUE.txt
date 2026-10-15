@@ -6,7 +6,8 @@ Qué tiene de nuevo
   Acepta:
     * Link de Google Maps (lo más exacto)
     * Coordenadas: 6.2844, -75.5980   ó   6.2529N 75.6182W
-    * Dirección: Carrera 91D #72-159, Cr 65 con Cl 84 (aproximada, usa OpenStreetMap)
+    * Dirección: Carrera 91D #72-159, Cr 65 con Cl 84 (busca la placa exacta con ArcGIS;
+      si no la encuentra, usa OpenStreetMap y muestra la vía o el cruce aproximado)
   Pone un marcador y dice en qué microrruta/lote cae el punto, o los 3 más cercanos con la distancia.
 - Clic derecho (o pulsación larga en el celular) en cualquier punto del mapa: dice qué lote es.
 - Ventana del lote (al hacer clic en un polígono): ahora muestra Microrruta, Lote, Zona, Cuadrilla,
