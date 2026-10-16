@@ -134,6 +134,7 @@
                     '<p style="margin:4px 0 0"><a href="https://www.google.com/maps/dir/?api=1&destination=' + ll + '" target="_blank">Cómo llegar (Google Maps)</a> · ' +
                     '<a href="https://waze.com/ul?ll=' + ll + '&navigate=yes" target="_blank">Waze</a></p>';
             }
+            html += '<p style="margin:6px 0 0"><a href="subsanaciones.html?mr=' + encodeURIComponent(mr) + '&lote=' + encodeURIComponent(p.No_Lote == null ? '' : p.No_Lote) + '" target="_blank">Registrar subsanación</a></p>';
             return html;
         }
         // Punto [lat, lon] dentro del lote: el centro si cae dentro del polígono; si no, el vértice más cercano al centro.
@@ -291,6 +292,15 @@ botonLotes.onAdd = function(map){
 };
 
 botonLotes.addTo(map);
+
+var botonSubsanaciones = L.control({position:'topleft'});
+botonSubsanaciones.onAdd = function(){
+    var div = L.DomUtil.create('div', 'leaflet-bar search-control');
+    div.innerHTML = '<a href="subsanaciones.html" target="_blank" title="Subsanaciones de lotes">&#128203;</a>';
+    L.DomEvent.disableClickPropagation(div);
+    return div;
+};
+botonSubsanaciones.addTo(map);
 		
         var measureControl = new L.Control.Measure({
             position: 'topleft',

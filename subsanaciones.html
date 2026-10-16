@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Subsanaciones de lotes</title>
+    <style>
+    :root { --brand: #167a55; --brand-dark: #0f6847; --ink: #1f2937; --muted: #64748b; --line: #dce4e8; --surface: #ffffff; --bg: #f3f6f5;
+            --pend: #b91c1c; --pend-bg: #fee2e2; --ok: #15803d; --ok-bg: #dcfce7; --sn: #1d4ed8; --sn-bg: #dbeafe; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: var(--ink); background: var(--bg); font-size: 14px; }
+    header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+    header h1 { margin: 0; font-size: 19px; flex: 1; min-width: 200px; }
+    header a.volver { color: var(--brand); text-decoration: none; font-weight: 600; }
+    main { max-width: 1320px; margin: 0 auto; padding: 16px; }
+    button, .boton { font: inherit; border-radius: 8px; border: 0; padding: 8px 14px; cursor: pointer; font-weight: 600; text-decoration: none; display: inline-block; }
+    .primario { color: #fff; background: var(--brand); }
+    .primario:hover { background: var(--brand-dark); }
+    .secundario { color: var(--brand); background: #edf8f3; }
+    .peligro { color: var(--pend); background: var(--pend-bg); }
+    .pequeno { padding: 5px 10px; font-size: 12px; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .tarjeta { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; cursor: pointer; }
+    .tarjeta.activa { outline: 2px solid var(--brand); }
+    .tarjeta .num { font-size: 24px; font-weight: 700; }
+    .tarjeta .tit { font-size: 12px; color: var(--muted); }
+    .filtros { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+    .filtros input, .filtros select { min-height: 38px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font: inherit; background: #fff; color: var(--ink); }
+    .filtros input { flex: 1; min-width: 200px; }
+    .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { font-size: 12px; color: var(--muted); font-weight: 650; background: #f8fafb; }
+    tr:last-child td { border-bottom: 0; }
+    td.acciones { white-space: nowrap; }
+    .vacio { padding: 30px; text-align: center; color: var(--muted); }
+    .estado { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 650; white-space: nowrap; }
+    .e-PENDIENTE { color: var(--pend); background: var(--pend-bg); }
+    .e-SUBSANADO { color: var(--ok); background: var(--ok-bg); }
+    .e-SIN-NOVEDAD { color: var(--sn); background: var(--sn-bg); }
+    .chip { display: inline-block; margin: 0 4px 4px 0; padding: 2px 8px; border-radius: 6px; font-size: 12px; color: var(--pend); background: var(--pend-bg); }
+    .sub { font-size: 12px; color: var(--muted); }
+    .aviso { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; line-height: 1.5; }
+    .aviso.error { background: var(--pend-bg); border-color: #fecaca; }
+    .cargando { padding: 30px; text-align: center; color: var(--muted); }
+    dialog { border: 0; border-radius: 14px; padding: 0; width: min(820px, calc(100% - 24px)); max-height: calc(100dvh - 24px); box-shadow: 0 20px 50px rgba(15, 45, 35, .3); }
+    dialog::backdrop { background: rgba(15, 30, 25, .45); }
+    dialog form { padding: 18px; }
+    dialog h2 { margin: 0 0 14px; font-size: 18px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .grid .doble { grid-column: span 2; }
+    .grid .ancho { grid-column: 1 / -1; }
+    label { display: block; font-size: 12px; font-weight: 650; color: #475569; }
+    label input, label select, label textarea { display: block; width: 100%; margin-top: 4px; min-height: 38px; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font: inherit; color: var(--ink); background: #fff; font-weight: 400; }
+    label textarea { min-height: 64px; resize: vertical; }
+    .direccion { grid-column: 1 / -1; margin-top: -4px; }
+    fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0; }
+    legend { font-size: 12px; font-weight: 700; color: var(--brand); padding: 0 6px; }
+    .item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+    .item:last-of-type { border-bottom: 0; }
+    .opciones { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+    .opciones input { position: absolute; opacity: 0; pointer-events: none; }
+    .opciones label { margin: 0; padding: 6px 12px; cursor: pointer; font-weight: 600; color: var(--muted); border-left: 1px solid var(--line); }
+    .opciones label:first-of-type { border-left: 0; }
+    .opciones input:checked + label.si { color: #fff; background: var(--ok); }
+    .opciones input:checked + label.no { color: #fff; background: var(--pend); }
+    .opciones input:checked + label.na { color: #fff; background: #64748b; }
+    .opciones input:focus-visible + label { outline: 2px solid var(--brand); outline-offset: -2px; }
+    .pie { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+    .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; z-index: 50; display: none; max-width: calc(100% - 32px); }
+    @media (max-width: 760px) {
+        .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        thead { display: none; }
+        table, tbody, tr, td { display: block; width: 100%; }
+        tr { border-bottom: 1px solid var(--line); padding: 8px 0; }
+        td { border: 0; padding: 4px 14px; }
+        td::before { content: attr(data-label); display: block; font-size: 11px; color: var(--muted); font-weight: 650; }
+        .item { flex-direction: column; align-items: flex-start; }
+    }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Subsanaciones de lotes</h1>
+    <a class="volver" href="index.html">← Volver al mapa</a>
+    <a class="boton secundario" id="abrir-hoja" target="_blank" hidden>Abrir hoja en Drive</a>
+    <button type="button" class="secundario" id="btn-excel">Descargar Excel</button>
+    <button type="button" class="secundario" id="btn-recargar">Actualizar</button>
+    <button type="button" class="primario" id="btn-nuevo">+ Nueva visita</button>
+</header>
+<main>
+    <div id="aviso"></div>
+    <div class="resumen" id="resumen"></div>
+    <div class="filtros">
+        <input type="search" id="f-texto" placeholder="Buscar por microrruta, lote, interventor, observaciones…">
+        <select id="f-estado" aria-label="Estado">
+            <option value="">Todos los estados</option><option>PENDIENTE</option><option>SUBSANADO</option><option>SIN NOVEDAD</option>
+        </select>
+        <select id="f-zona" aria-label="Zona"></select>
+        <select id="f-cuadrilla" aria-label="Cuadrilla"></select>
+    </div>
+    <div class="panel"><div id="tabla"><div class="cargando">Cargando…</div></div></div>
+</main>
+
+<dialog id="dlg">
+    <form id="form" method="dialog" autocomplete="off">
+        <h2><span id="dlg-titulo">Nueva visita</span> <span class="estado" id="dlg-estado"></span></h2>
+        <div class="grid">
+            <label class="doble">MICRORRUTA <input data-campo="MICRORRUTA" list="lista-mr" placeholder="Ej.: Z2CC0067"></label>
+            <label>LOTE <input data-campo="LOTE"></label>
+            <label>ÁREA M2 <input data-campo="ÁREA M2"></label>
+            <div class="direccion sub" id="dlg-direccion"></div>
+            <label>ZONA <input data-campo="ZONA"></label>
+            <label>CUADRILLA <input data-campo="CUADRILLA"></label>
+            <label class="doble">INTERVENTOR <input data-campo="INTERVENTOR" placeholder="Iniciales"></label>
+            <label class="doble">FECHA DE EJECUCIÓN <input type="date" data-campo="FECHA DE EJECUCIÓN"></label>
+            <label class="doble">FECHA DE LA VISITA <input type="date" data-campo="FECHA DE LA VISITA"></label>
+            <fieldset class="ancho">
+                <legend>Ítems revisados (SI = cumple · NO = requiere subsanación)</legend>
+                <div id="items"></div>
+                <div style="margin-top:8px"><button type="button" class="secundario pequeno" id="todo-si">Marcar todos SI</button></div>
+            </fieldset>
+            <label class="ancho">OBSERVACIONES NOVEDADES <textarea data-campo="OBSERVACIONES NOVEDADES" placeholder="SIN NOVEDAD"></textarea></label>
+            <fieldset class="ancho">
+                <legend>Subsanación</legend>
+                <div class="grid">
+                    <label class="doble">FECHA SUBSANACIÓN <input type="date" data-campo="FECHA SUBSANACIÓN"></label>
+                    <label class="doble">REGISTRADO POR <input data-campo="REGISTRADO POR"></label>
+                    <label class="ancho">EVIDENCIA (link de fotos / Drive) <input type="url" data-campo="EVIDENCIA" placeholder="https://"></label>
+                    <label class="ancho">OBSERVACIÓN SUBSANACIÓN <textarea data-campo="OBSERVACIÓN SUBSANACIÓN"></textarea></label>
+                </div>
+            </fieldset>
+        </div>
+        <div class="pie">
+            <button type="button" class="peligro" id="btn-eliminar" hidden>Eliminar</button>
+            <span style="flex:1"></span>
+            <button type="button" class="secundario" id="btn-cancelar">Cancelar</button>
+            <button type="submit" class="primario" id="btn-guardar">Guardar</button>
+        </div>
+    </form>
+</dialog>
+<datalist id="lista-mr"></datalist>
+<div class="toast" id="toast"></div>
+
+<script src="js/subsanaciones_config.js"></script>
+<script src="data/direcciones_lotes.js"></script>
+<script>
+(function () {
+    var CFG = window.SUBSANACIONES_CONFIG || {};
+    var LOTES = window.direccionesLotes || {};
+    var FIJAS = ['MICRORRUTA', 'LOTE', 'ÁREA M2', 'ZONA', 'CUADRILLA', 'FECHA DE EJECUCIÓN', 'FECHA DE LA VISITA', 'INTERVENTOR',
+        'OBSERVACIONES NOVEDADES', 'ESTADO', 'FECHA SUBSANACIÓN', 'OBSERVACIÓN SUBSANACIÓN', 'EVIDENCIA', 'ID', 'REGISTRADO POR', 'ÚLTIMA MODIFICACIÓN'];
+    var FECHAS = ['FECHA DE EJECUCIÓN', 'FECHA DE LA VISITA', 'FECHA SUBSANACIÓN'];
+    var items = [], columnas = [], registros = [], editando = null;
+    var $ = function (id) { return document.getElementById(id); };
+    var dlg = $('dlg'), form = $('form');
+
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+    function norm(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(); }
+    function valorItem(v) { v = norm(v).replace(/[.\s]/g, ''); return v === 'SI' ? 'SI' : v === 'NO' ? 'NO' : (v === 'NA' || v === 'N/A') ? 'N/A' : ''; }
+    function hoy() { var d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
+    // La hoja guarda dd/mm/aaaa como el Excel; el selector de fecha usa aaaa-mm-dd
+    function aInput(s) {
+        var m = String(s || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+        m = String(s || '').match(/^\d{4}-\d{2}-\d{2}/);
+        return m ? m[0] : '';
+    }
+    function aTexto(s) { var m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? m[3] + '/' + m[2] + '/' + m[1] : s; }
+    function dias(desde) { var a = aInput(desde); return a ? Math.floor((new Date(hoy()) - new Date(a)) / 864e5) : null; }
+    function toast(msg) { var t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = 'none'; }, 3500); }
+    function aviso(html, error) { $('aviso').innerHTML = html ? '<div class="aviso' + (error ? ' error' : '') + '">' + html + '</div>' : ''; }
+
+    // ---------- API (Apps Script) ----------
+    function clave() { try { return localStorage.getItem('subsanaciones_clave') || ''; } catch (e) { return ''; } }
+    function respuesta(r) {
+        return r.json().then(function (d) { if (!d.ok) throw new Error(d.error || 'Error desconocido'); return d; });
+    }
+    function conClave(fn) {
+        return fn().catch(function (err) {
+            if (err.message !== 'CLAVE_INVALIDA') throw err;
+            var c = prompt('Escriba la clave de subsanaciones:');
+            if (c === null) throw new Error('Se necesita la clave para continuar.');
+            try { localStorage.setItem('subsanaciones_clave', c); } catch (e) {}
+            return conClave(fn);
+        });
+    }
+    function leer() {
+        return conClave(function () { return fetch(CFG.url + '?clave=' + encodeURIComponent(clave())).then(respuesta); });
+    }
+    function enviar(accion, datos) {
+        // text/plain evita la verificación CORS previa que Apps Script no responde
+        return conClave(function () {
+            var cuerpo = Object.assign({ accion: accion, clave: clave() }, datos);
+            return fetch(CFG.url, { method: 'POST', body: JSON.stringify(cuerpo) }).then(respuesta);
+        });
+    }
+
+    // Deja cada registro con los nombres de columna conocidos aunque en la hoja tengan otra tilde o espacios
+    function canonico(r) {
+        var porNorm = {};
+        Object.keys(r).forEach(function (k) { porNorm[norm(k)] = r[k]; });
+        FIJAS.concat(items).forEach(function (c) { if (porNorm[norm(c)] !== undefined) r[c] = porNorm[norm(c)]; });
+        return r;
+    }
+
+    // ---------- Estado (el servidor lo recalcula al guardar) ----------
+    function itemsEnNo(r) { return items.filter(function (i) { return valorItem(r[i]) === 'NO'; }); }
+    function calcularEstado(r, anterior) {
+        if (itemsEnNo(r).length) return 'PENDIENTE';
+        return (anterior === 'PENDIENTE' || anterior === 'SUBSANADO') ? 'SUBSANADO' : 'SIN NOVEDAD';
+    }
+    function badge(estado) { return estado ? '<span class="estado e-' + estado.replace(/ /g, '-') + '">' + esc(estado) + '</span>' : ''; }
+
+    // ---------- Listado ----------
+    function cargar() {
+        if (!CFG.url) {
+            aviso('<b>Falta conectar la hoja de Google.</b> Siga los pasos de <code>LEEME_SUBSANACIONES.txt</code>: cree la hoja, pegue <code>apps_script/Code.gs</code>, ' +
+                'publíquelo como aplicación web y copie la URL en <code>js/subsanaciones_config.js</code>.', true);
+            $('tabla').innerHTML = '<div class="vacio">Sin conexión a la base de datos.</div>';
+            $('btn-nuevo').disabled = true;
+            return;
+        }
+        $('tabla').innerHTML = '<div class="cargando">Cargando…</div>';
+        leer().then(function (d) {
+            aviso('');
+            items = d.items || [];
+            columnas = d.columnas || [];
+            registros = (d.registros || []).map(canonico).sort(function (a, b) {
+                return aInput(b['FECHA DE LA VISITA']).localeCompare(aInput(a['FECHA DE LA VISITA'])) || String(b.ID).localeCompare(String(a.ID));
+            });
+            llenarSelect('f-zona', 'ZONA', 'Todas las zonas');
+            llenarSelect('f-cuadrilla', 'CUADRILLA', 'Todas las cuadrillas');
+            pintar();
+            abrirDesdeUrl();
+        }).catch(function (err) {
+            aviso('<b>No se pudo leer la hoja:</b> ' + esc(err.message) + '. Revise que la aplicación web esté publicada con acceso "Cualquier usuario".', true);
+            $('tabla').innerHTML = '<div class="vacio">No hay datos.</div>';
+        });
+    }
+
+    function llenarSelect(id, campo, todos) {
+        var sel = $(id), actual = sel.value;
+        var valores = registros.map(function (r) { return String(r[campo] || '').trim(); }).filter(Boolean)
+            .filter(function (z, i, a) { return a.indexOf(z) === i; }).sort(function (a, b) { return a.localeCompare(b, 'es', { numeric: true }); });
+        sel.innerHTML = '<option value="">' + todos + '</option>' + valores.map(function (z) { return '<option>' + esc(z) + '</option>'; }).join('');
+        sel.value = actual;
+    }
+
+    function filtrados() {
+        var texto = norm($('f-texto').value), est = $('f-estado').value, zona = $('f-zona').value, cuad = $('f-cuadrilla').value;
+        return registros.filter(function (r) {
+            if (zona && String(r.ZONA).trim() !== zona) return false;
+            if (cuad && String(r.CUADRILLA).trim() !== cuad) return false;
+            if (est && r.ESTADO !== est) return false;
+            if (!texto) return true;
+            return ['ID', 'MICRORRUTA', 'LOTE', 'INTERVENTOR', 'OBSERVACIONES NOVEDADES', 'OBSERVACIÓN SUBSANACIÓN']
+                .some(function (c) { return norm(r[c]).indexOf(texto) !== -1; });
+        });
+    }
+
+    function pintar() {
+        var cuenta = { '': registros.length, PENDIENTE: 0, SUBSANADO: 0, 'SIN NOVEDAD': 0 };
+        registros.forEach(function (r) { if (cuenta[r.ESTADO] != null) cuenta[r.ESTADO]++; });
+        var est = $('f-estado').value;
+        $('resumen').innerHTML = [['', 'Visitas'], ['PENDIENTE', 'Pendientes de subsanar'], ['SUBSANADO', 'Subsanadas'], ['SIN NOVEDAD', 'Sin novedad']].map(function (t) {
+            return '<div class="tarjeta' + (est === t[0] ? ' activa' : '') + '" data-estado="' + t[0] + '"><div class="num">' + cuenta[t[0]] + '</div><div class="tit">' + t[1] + '</div></div>';
+        }).join('');
+
+        var lista = filtrados();
+        if (!lista.length) {
+            $('tabla').innerHTML = '<div class="vacio">' + (registros.length ? 'Ningún registro coincide con los filtros.' : 'Aún no hay visitas. Use "+ Nueva visita" o pegue su Excel en la hoja de Drive.') + '</div>';
+            return;
+        }
+        $('tabla').innerHTML = '<table><thead><tr><th>Microrruta / Lote</th><th>Visita</th><th>Ítems en NO</th><th>Estado</th><th>Observaciones</th><th></th></tr></thead><tbody>' +
+            lista.map(function (r) {
+                var enNo = itemsEnNo(r), d = r.ESTADO === 'PENDIENTE' ? dias(r['FECHA DE LA VISITA']) : null;
+                return '<tr>' +
+                    '<td data-label="Microrruta / Lote"><b>' + esc(r.MICRORRUTA || '—') + '</b><div class="sub">Lote ' + esc(r.LOTE || '—') +
+                        (r.ZONA ? ' · Zona ' + esc(r.ZONA) : '') + (r.CUADRILLA ? ' · Cuadrilla ' + esc(r.CUADRILLA) : '') + '</div></td>' +
+                    '<td data-label="Visita">' + esc(r['FECHA DE LA VISITA'] || '—') + '<div class="sub">' + esc(r.INTERVENTOR || '') +
+                        (r['FECHA DE EJECUCIÓN'] ? ' · Ejecución ' + esc(r['FECHA DE EJECUCIÓN']) : '') + '</div></td>' +
+                    '<td data-label="Ítems en NO">' + (enNo.length ? enNo.map(function (i) { return '<span class="chip">' + esc(i) + '</span>'; }).join('') : '<span class="sub">Ninguno</span>') + '</td>' +
+                    '<td data-label="Estado">' + badge(r.ESTADO) +
+                        (d != null ? '<div class="sub">' + d + ' día' + (d === 1 ? '' : 's') + ' desde la visita</div>' : '') +
+                        (r.ESTADO === 'SUBSANADO' && r['FECHA SUBSANACIÓN'] ? '<div class="sub">' + esc(r['FECHA SUBSANACIÓN']) + '</div>' : '') + '</td>' +
+                    '<td data-label="Observaciones">' + esc(r['OBSERVACIONES NOVEDADES'] || '') +
+                        (r['OBSERVACIÓN SUBSANACIÓN'] ? '<div class="sub">Subsanación: ' + esc(r['OBSERVACIÓN SUBSANACIÓN']) + '</div>' : '') + '</td>' +
+                    '<td class="acciones"><button type="button" class="secundario pequeno" data-editar="' + esc(r.ID) + '">Editar</button></td>' +
+                    '</tr>';
+            }).join('') + '</tbody></table>';
+    }
+
+    // ---------- Formulario ----------
+    function campos() { return form.querySelectorAll('[data-campo]'); }
+    function datosFormulario() {
+        var r = {};
+        campos().forEach(function (el) { r[el.dataset.campo] = FECHAS.indexOf(el.dataset.campo) !== -1 ? aTexto(el.value) : el.value.trim(); });
+        items.forEach(function (it, i) { var m = form.querySelector('input[name="item' + i + '"]:checked'); r[it] = m ? m.value : ''; });
+        return r;
+    }
+    function actualizarEstadoForm() {
+        var estado = calcularEstado(datosFormulario(), editando ? editando.ESTADO : '');
+        $('dlg-estado').className = 'estado e-' + estado.replace(/ /g, '-');
+        $('dlg-estado').textContent = estado;
+        var fecha = form.querySelector('[data-campo="FECHA SUBSANACIÓN"]');
+        if (estado === 'SUBSANADO' && !fecha.value) fecha.value = hoy();
+    }
+    function pintarItems(r, nuevo) {
+        $('items').innerHTML = items.length ? items.map(function (it, i) {
+            var v = nuevo ? 'SI' : valorItem(r[it]);
+            return '<div class="item"><span>' + esc(it) + '</span><span class="opciones">' +
+                [['SI', 'si'], ['NO', 'no'], ['N/A', 'na']].map(function (o) {
+                    var id = 'it' + i + o[1];
+                    return '<input type="radio" id="' + id + '" name="item' + i + '" value="' + o[0] + '"' + (v === o[0] ? ' checked' : '') + '><label class="' + o[1] + '" for="' + id + '">' + o[0] + '</label>';
+                }).join('') + '</span></div>';
+        }).join('') : '<div class="sub">No hay ítems activos en la hoja "Items".</div>';
+    }
+    function mostrarDireccion() {
+        var p = LOTES[form.querySelector('[data-campo="MICRORRUTA"]').value.trim().toUpperCase()];
+        $('dlg-direccion').textContent = p && p.d ? 'Dirección: ' + p.d : '';
+    }
+    function abrir(r) {
+        editando = r && r.ID ? r : null;
+        r = r || {};
+        $('dlg-titulo').textContent = editando ? 'Editar ' + editando.ID : 'Nueva visita';
+        $('btn-eliminar').hidden = !editando;
+        campos().forEach(function (el) {
+            var v = r[el.dataset.campo] || '';
+            el.value = FECHAS.indexOf(el.dataset.campo) !== -1 ? aInput(v) : v;
+        });
+        if (!editando) {
+            if (!r['FECHA DE LA VISITA']) form.querySelector('[data-campo="FECHA DE LA VISITA"]').value = hoy();
+            try {
+                form.querySelector('[data-campo="REGISTRADO POR"]').value = localStorage.getItem('subsanaciones_usuario') || '';
+                form.querySelector('[data-campo="INTERVENTOR"]').value = localStorage.getItem('subsanaciones_interventor') || '';
+            } catch (e) {}
+        }
+        pintarItems(r, !editando);
+        mostrarDireccion();
+        actualizarEstadoForm();
+        dlg.showModal();
+    }
+    function ocupado(si) { ['btn-guardar', 'btn-eliminar', 'btn-cancelar'].forEach(function (id) { $(id).disabled = si; }); }
+
+    form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        var r = datosFormulario();
+        if (!r.MICRORRUTA && !r.LOTE) { toast('Indique la microrruta o el lote.'); return; }
+        var sinMarcar = items.filter(function (it) { return !r[it]; });
+        if (sinMarcar.length) { toast('Falta marcar: ' + sinMarcar.join(', ')); return; }
+        try {
+            localStorage.setItem('subsanaciones_usuario', r['REGISTRADO POR']);
+            localStorage.setItem('subsanaciones_interventor', r.INTERVENTOR);
+        } catch (e) {}
+        ocupado(true);
+        var era = editando;
+        var peticion = era ? enviar('actualizar', { id: era.ID, registro: r }) : enviar('crear', { registro: r });
+        peticion.then(function (d) {
+            var nuevo = canonico(d.registro);
+            var i = registros.findIndex(function (x) { return x.ID === nuevo.ID; });
+            if (i === -1) registros.unshift(nuevo); else registros[i] = nuevo;
+            dlg.close();
+            llenarSelect('f-zona', 'ZONA', 'Todas las zonas');
+            llenarSelect('f-cuadrilla', 'CUADRILLA', 'Todas las cuadrillas');
+            pintar();
+            toast((era ? 'Actualizado ' : 'Guardado ') + nuevo.ID + ' · ' + nuevo.ESTADO);
+        }).catch(function (err) { toast('No se guardó: ' + err.message); })
+          .then(function () { ocupado(false); });
+    });
+
+    $('btn-eliminar').onclick = function () {
+        if (!editando || !confirm('¿Eliminar ' + editando.ID + '? Se borrará la fila de la hoja.')) return;
+        ocupado(true);
+        var id = editando.ID;
+        enviar('eliminar', { id: id }).then(function () {
+            registros = registros.filter(function (x) { return x.ID !== id; });
+            dlg.close();
+            pintar();
+            toast('Eliminado ' + id);
+        }).catch(function (err) { toast('No se eliminó: ' + err.message); })
+          .then(function () { ocupado(false); });
+    };
+    $('btn-cancelar').onclick = function () { dlg.close(); };
+    $('todo-si').onclick = function () {
+        items.forEach(function (it, i) { var el = $('it' + i + 'si'); if (el) el.checked = true; });
+        actualizarEstadoForm();
+    };
+    $('items').addEventListener('change', actualizarEstadoForm);
+
+    // Autocompletar con la programación de microrrutas (data/direcciones_lotes.js)
+    var mrPorLote = {};
+    Object.keys(LOTES).forEach(function (mr) { if (LOTES[mr].lote && !mrPorLote[LOTES[mr].lote]) mrPorLote[LOTES[mr].lote] = mr; });
+    $('lista-mr').innerHTML = Object.keys(LOTES).sort().map(function (mr) { return '<option value="' + esc(mr) + '">Lote ' + esc(LOTES[mr].lote) + '</option>'; }).join('');
+    function completar(mr) {
+        var p = LOTES[mr];
+        if (!p) return;
+        var poner = function (c, v) { var el = form.querySelector('[data-campo="' + c + '"]'); if (v != null && v !== '') el.value = v; };
+        poner('MICRORRUTA', mr);
+        poner('LOTE', p.lote);
+        poner('CUADRILLA', p.cuad);
+        if (p.area) poner('ÁREA M2', Number(p.area).toLocaleString('es-CO'));
+        var z = mr.match(/^Z(\d+)/i);
+        if (z) poner('ZONA', z[1]);
+        mostrarDireccion();
+    }
+    form.querySelector('[data-campo="MICRORRUTA"]').addEventListener('change', function () { completar(this.value.trim().toUpperCase()); });
+    form.querySelector('[data-campo="LOTE"]').addEventListener('change', function () {
+        var mrEl = form.querySelector('[data-campo="MICRORRUTA"]');
+        if (!mrEl.value && mrPorLote[this.value.trim()]) completar(mrPorLote[this.value.trim()]);
+    });
+
+    // Desde el mapa: subsanaciones.html?mr=Z2CC0067&lote=264
+    var desdeUrlHecho = false;
+    function abrirDesdeUrl() {
+        if (desdeUrlHecho) return;
+        desdeUrlHecho = true;
+        var q = new URLSearchParams(location.search), mr = q.get('mr') || '', lote = q.get('lote') || '';
+        if (!mr && !lote) return;
+        $('f-texto').value = mr || lote;
+        pintar();
+        abrir({ MICRORRUTA: mr, LOTE: lote });
+        if (mr) completar(mr); else if (mrPorLote[lote]) completar(mrPorLote[lote]);
+    }
+
+    // ---------- Eventos generales ----------
+    $('btn-nuevo').onclick = function () { abrir(null); };
+    $('btn-recargar').onclick = cargar;
+    $('f-texto').oninput = pintar;
+    $('f-estado').onchange = pintar;
+    $('f-zona').onchange = pintar;
+    $('f-cuadrilla').onchange = pintar;
+    $('resumen').onclick = function (ev) {
+        var t = ev.target.closest('.tarjeta');
+        if (t) { $('f-estado').value = t.dataset.estado; pintar(); }
+    };
+    $('tabla').onclick = function (ev) {
+        var b = ev.target.closest('[data-editar]');
+        if (b) abrir(registros.find(function (r) { return r.ID === b.dataset.editar; }));
+    };
+    if (CFG.hoja) { $('abrir-hoja').href = CFG.hoja; $('abrir-hoja').hidden = false; }
+
+    // Excel con las mismas columnas de la hoja y lo que esté filtrado (SheetJS se carga solo al pedirlo)
+    $('btn-excel').onclick = function () {
+        var lista = filtrados();
+        if (!lista.length) { toast('No hay registros para exportar.'); return; }
+        var exportar = function () {
+            var cab = columnas.filter(Boolean);
+            var hoja = XLSX.utils.json_to_sheet(lista.map(function (r) { var o = {}; cab.forEach(function (c) { o[c] = r[c] || ''; }); return o; }), { header: cab });
+            var libro = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(libro, hoja, 'Subsanaciones');
+            XLSX.writeFile(libro, 'subsanaciones_' + hoy() + '.xlsx');
+        };
+        if (window.XLSX) return exportar();
+        var s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = exportar;
+        s.onerror = function () { toast('No se pudo cargar el generador de Excel (revise la conexión).'); };
+        document.head.appendChild(s);
+    };
+
+    cargar();
+})();
+</script>
+</body>
+</html>

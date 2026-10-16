@@ -1,0 +1,60 @@
+PESTAÑA DE SUBSANACIONES DE LOTES
+=================================
+
+Qué hace
+- Página aparte: subsanaciones.html (botón 📋 en el mapa, debajo de la lupa, o enlace
+  "Registrar subsanación" en la ventana de cada lote, que ya llega con la microrruta y el lote).
+- Crear, ver, editar y eliminar visitas de interventoría con las mismas columnas del Excel:
+  MICRORRUTA, LOTE, ÁREA M2, ZONA, CUADRILLA, FECHA DE EJECUCIÓN, FECHA DE LA VISITA, INTERVENTOR,
+  los 9 ítems (SI / NO / N/A) y OBSERVACIONES NOVEDADES. Lote, área, zona y cuadrilla se llenan
+  solos al escoger la microrruta.
+- Al final se agregan columnas de seguimiento: ESTADO, FECHA SUBSANACIÓN, OBSERVACIÓN SUBSANACIÓN,
+  EVIDENCIA, ID, REGISTRADO POR, ÚLTIMA MODIFICACIÓN.
+- El estado se calcula solo (SI = cumple):
+    * algún ítem en NO                      -> PENDIENTE (muestra cuántos días lleva desde la visita)
+    * todo en SI después de estar pendiente  -> SUBSANADO (se pone la fecha de subsanación)
+    * todo en SI desde la primera visita     -> SIN NOVEDAD
+  Para subsanar: abra el registro pendiente, cambie a SI los ítems corregidos, adjunte evidencia y guarde.
+- Todo se guarda en una Hoja de cálculo de Google en su Drive (una fila por visita, una columna por ítem).
+
+Pasar los registros que ya tiene en Excel
+- Copie las filas de datos de su Excel (sin el encabezado, columnas MICRORRUTA a OBSERVACIONES NOVEDADES)
+  y péguelas en la hoja "Subsanaciones" desde la celda A2. Al abrir o actualizar la página, cada fila
+  pegada recibe su ID y su ESTADO automáticamente.
+  Botón "Descargar Excel" baja un .xlsx con lo que esté filtrado. Desde Drive también: Archivo > Descargar > Microsoft Excel.
+
+Por qué Hoja de Google y no un .xlsx
+- Una página publicada en GitHub Pages no puede escribir dentro de un archivo .xlsx de Drive.
+  La Hoja de Google sí, por medio de un Apps Script gratuito, y se abre o descarga como Excel cuando quiera.
+
+Instalación (una sola vez, unos 5 minutos)
+1. En Google Drive: Nuevo > Hojas de cálculo de Google. Póngale nombre, p. ej. "Subsanaciones lotes".
+2. En la hoja: Extensiones > Apps Script. Borre lo que haya y pegue TODO el contenido de apps_script/Code.gs.
+   (Opcional: escriba una clave en  var CLAVE = 'su-clave';  para que solo quien la sepa pueda guardar.)
+   Guarde (icono de disquete).
+3. Arriba, en la lista de funciones, elija "configurar" y pulse Ejecutar. Google pedirá permisos:
+   Revisar permisos > su cuenta > Configuración avanzada > Ir a ... (no seguro) > Permitir.
+   Esto crea las hojas "Subsanaciones" e "Items".
+4. Implementar > Nueva implementación > tipo "Aplicación web":
+     - Ejecutar como: Yo
+     - Quién tiene acceso: Cualquier usuario
+   Implementar y copie la URL que termina en /exec.
+5. Abra js/subsanaciones_config.js y pegue la URL entre las comillas de  url: ''.
+   Si quiere el botón "Abrir hoja en Drive", pegue el link de la hoja en  hoja: ''.
+6. Suba los archivos nuevos/cambiados a GitHub (subsanaciones.html, js/subsanaciones_config.js, index.html).
+
+Cambiar los ítems de revisión
+- En la hoja "Items": columna A el nombre del ítem, columna B "SI" o "NO" (activo).
+  Vienen los 9 del Excel. Agregar una fila = ítem nuevo (su columna se crea sola al final de
+  "Subsanaciones" al guardar). Poner "NO" lo oculta del formulario sin borrar lo ya registrado.
+  Después de cambiar ítems, pulse "Actualizar" en la página.
+
+Si cambia el código del Apps Script
+- Implementar > Administrar implementaciones > editar (lápiz) > Versión: Nueva versión > Implementar.
+  Así la URL sigue siendo la misma.
+
+Notas
+- Con "Cualquier usuario", quien tenga la URL /exec puede leer y escribir; por eso conviene poner CLAVE.
+- La clave y el nombre de "Registrado por" se recuerdan en cada navegador.
+- No edite a mano la columna ID de la hoja; el resto de columnas sí se pueden corregir directamente en Drive.
+- Probar en el computador: python -m http.server 8000  y abrir http://localhost:8000/subsanaciones.html
