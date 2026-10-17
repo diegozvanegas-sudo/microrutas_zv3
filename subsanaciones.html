@@ -745,9 +745,20 @@
 
     // ---------- Pre-ruta: lotes que mandan a revisar (se guarda en este celular) ----------
     var CENTROS = window.centrosLotes || {};
-    var rutas = (function () { try { return JSON.parse(localStorage.getItem('subsanaciones_rutas')) || []; } catch (e) { return []; } })();
-    var posicion = null;
+    // Una ruta por cuadrilla: { cuad, paradas: [{ id, fecha (ejecución), creada }] }
+    var rutas = [], posicion = null;
     function guardarRutas() { try { localStorage.setItem('subsanaciones_rutas', JSON.stringify(rutas)); } catch (e) {} }
+    function agregarParadas(cuad, nuevas) {
+        var ruta = rutas.find(function (r) { return r.cuad === cuad; });
+        if (!ruta) { ruta = { cuad: cuad, paradas: [] }; rutas.push(ruta); }
+        nuevas.forEach(function (n) {
+            var ya = ruta.paradas.find(function (p) { return p.id === n.id; });
+            if (ya) { ya.fecha = n.fecha || ya.fecha; ya.creada = n.creada; } else ruta.paradas.push(n);
+        });
+        // Cuadrillas en orden numérico; las sin cuadrilla al final
+        rutas.sort(function (a, b) { return (a.cuad ? 0 : 1) - (b.cuad ? 0 : 1) || a.cuad.localeCompare(b.cuad, 'es', { numeric: true }); });
+        return ruta;
+    }
 
     // "Lotes ejecutados el 14-10-2026 por la cuadrilla #2 \n 532 \n 371" -> fecha, cuadrilla y lotes
     function parsearMensaje(texto) {
@@ -768,10 +779,10 @@
         var mr = LOTES[id] ? id : mrPorLote[id] || '', p = LOTES[mr] || {};
         return { id: id, mr: mr, lote: LOTES[id] ? '' : id, cuad: p.cuad || '', d: p.d || '', c: CENTROS[id] || null };
     }
-    function visitaDe(ruta, x) {
+    function visitaDe(p, x) {
         return registros.find(function (r) {
             var mismo = x.lote ? String(r.LOTE || '').trim() === x.lote : String(r.MICRORRUTA || '').trim().toUpperCase() === x.mr;
-            return mismo && ((ruta.fecha && aInput(r['FECHA DE EJECUCIÓN']) === ruta.fecha) || aInput(r['FECHA DE LA VISITA']) >= ruta.creada);
+            return mismo && ((p.fecha && aInput(r['FECHA DE EJECUCIÓN']) === p.fecha) || aInput(r['FECHA DE LA VISITA']) >= p.creada);
         });
     }
     function metros(a, b) {
@@ -782,19 +793,48 @@
     function textoDist(m) { return m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
     function urlIr(c) { return 'https://www.google.com/maps/dir/?api=1&destination=' + c[0] + ',' + c[1] + '&travelmode=driving'; }
 
-    // Pendientes primero, por vecino más cercano desde la ubicación (o desde el primer lote); revisados al final
+    // Pendientes primero en el recorrido más corto; luego los que no tienen ubicación y al final los ya revisados
     function ordenar(ruta, desde) {
         var pend = [], hechos = [], sinC = [];
-        ruta.lotes.forEach(function (id) { var x = infoLote(id); (visitaDe(ruta, x) ? hechos : x.c ? pend : sinC).push(id); });
-        var orden = [], actual = desde || (pend.length ? CENTROS[pend[0]] : null);
-        while (pend.length) {
-            var mejor = 0;
-            pend.forEach(function (id, i) { if (metros(actual, CENTROS[id]) < metros(actual, CENTROS[pend[mejor]])) mejor = i; });
-            actual = CENTROS[pend[mejor]];
-            orden.push(pend.splice(mejor, 1)[0]);
-        }
-        ruta.lotes = orden.concat(sinC, hechos);
+        ruta.paradas.forEach(function (p) { var x = infoLote(p.id); (visitaDe(p, x) ? hechos : x.c ? pend : sinC).push(p); });
+        ruta.paradas = recorridoCorto(pend, desde).concat(sinC, hechos);
     }
+    // Vecino más cercano (probando cada lote como inicio si no hay ubicación) y luego 2-opt: deshace los cruces del recorrido
+    function recorridoCorto(ps, desde) {
+        if (ps.length < 2) return ps;
+        var c = function (p) { return CENTROS[p.id]; };
+        var largo = function (o) { var t = 0, a = desde; o.forEach(function (p) { if (a) t += metros(a, c(p)); a = c(p); }); return t; };
+        var mejor = null;
+        (desde ? [null] : ps).forEach(function (ini) {
+            var resto = ps.slice(), orden = [], actual = desde;
+            if (ini) { orden.push(resto.splice(resto.indexOf(ini), 1)[0]); actual = c(ini); }
+            while (resto.length) {
+                var k = 0;
+                resto.forEach(function (p, i) { if (metros(actual, c(p)) < metros(actual, c(resto[k]))) k = i; });
+                actual = c(resto[k]);
+                orden.push(resto.splice(k, 1)[0]);
+            }
+            if (!mejor || largo(orden) < largo(mejor)) mejor = orden;
+        });
+        for (var mejoro = true; mejoro;) {
+            mejoro = false;
+            for (var i = 0; i < mejor.length - 1; i++) for (var k = i + 1; k < mejor.length; k++) {
+                var prueba = mejor.slice(0, i).concat(mejor.slice(i, k + 1).reverse(), mejor.slice(k + 1));
+                if (largo(prueba) < largo(mejor) - 1) { mejor = prueba; mejoro = true; }
+            }
+        }
+        return mejor;
+    }
+    // Carga lo guardado; el formato anterior (una ruta por mensaje) se junta por cuadrilla y se reordena
+    (function () {
+        var guardadas;
+        try { guardadas = JSON.parse(localStorage.getItem('subsanaciones_rutas')) || []; } catch (e) { guardadas = []; }
+        var antiguas = guardadas.some(function (r) { return r.lotes; });
+        guardadas.forEach(function (r) {
+            agregarParadas(r.cuad || '', r.paradas || r.lotes.map(function (id) { return { id: id, fecha: r.fecha || '', creada: r.creada }; }));
+        });
+        if (antiguas) { rutas.forEach(function (r) { ordenar(r, null); }); guardarRutas(); }
+    })();
 
     function pintarRutas() {
         var cont = $('ruta');
@@ -804,7 +844,8 @@
             return;
         }
         cont.innerHTML = rutas.map(function (ruta, ri) {
-            var paradas = ruta.lotes.map(function (id) { var x = infoLote(id); x.visita = visitaDe(ruta, x); return x; });
+            var paradas = ruta.paradas.map(function (p) { var x = infoLote(p.id); x.fecha = p.fecha; x.visita = visitaDe(p, x); return x; });
+            var fechas = paradas.map(function (x) { return x.fecha; }).filter(function (f, i, a) { return f && a.indexOf(f) === i; }).sort();
             var hechas = paradas.filter(function (x) { return x.visita; }).length;
             var pend = paradas.filter(function (x) { return !x.visita; }), sig = pend[0];
             var proximas = pend.filter(function (x) { return x.c; }).slice(0, 4); // Google Maps en el celular admite 3 paradas + destino
@@ -814,12 +855,12 @@
             var prev = posicion, prevUsted = !!posicion;
             return '<div class="ruta-card">' +
                 '<div class="ruta-cab"><div><b>' + (ruta.cuad ? 'Cuadrilla ' + esc(ruta.cuad) : 'Pre-ruta') + '</b>' +
-                    (ruta.fecha ? ' · ejecutados ' + esc(aTexto(ruta.fecha)) : '') +
+                    (fechas.length ? ' · ejecutados ' + esc(fechas.map(aTexto).join(', ')) : '') +
                     '<div class="sub">' + (hechas === paradas.length ? '✓ Ruta completa · ' : '') + hechas + ' de ' + paradas.length + ' revisados</div></div>' +
                     '<button type="button" class="ruta-quitar" data-ruta="quitar" data-ri="' + ri + '" aria-label="Quitar pre-ruta">×</button></div>' +
                 '<div class="progreso"><span style="width:' + Math.round(100 * hechas / paradas.length) + '%"></span></div>' +
                 '<div class="ruta-acciones">' +
-                    (pend.length > 1 ? '<button type="button" class="secundario pequeno" data-ruta="ordenar" data-ri="' + ri + '">📍 Ordenar por cercanía</button>' : '') +
+                    (pend.length > 1 ? '<button type="button" class="secundario pequeno" data-ruta="ordenar" data-ri="' + ri + '">📍 Ordenar desde mi ubicación</button>' : '') +
                     (gmaps ? '<a class="boton primario pequeno" target="_blank" rel="noopener" href="' + esc(gmaps) + '">Ruta en Google Maps' + (pend.length > proximas.length ? ' (próximos ' + proximas.length + ')' : '') + '</a>' : '') +
                     (conLote.length ? '<a class="boton secundario pequeno" href="' + esc('index.html?lote=' + conLote.join(',')) + '">Ver todos en el mapa</a>' : '') +
                 '</div>' +
@@ -831,6 +872,7 @@
                         '<span class="n">' + (x.visita ? '✓' : i + 1) + '</span>' +
                         '<div class="info"><div class="titulo"><b>' + esc(x.lote ? 'Lote ' + x.lote : x.mr) + '</b>' +
                             (x.lote && x.mr ? ' <span class="sub">' + esc(x.mr) + '</span>' : '') +
+                            (fechas.length > 1 && x.fecha ? ' <span class="sub">· ejec. ' + esc(aTexto(x.fecha).slice(0, 5)) + '</span>' : '') +
                             (x === sig ? ' <span class="tag-sig">Siguiente</span>' : '') + (x.visita ? ' ' + badge(x.visita.ESTADO) : '') + '</div>' +
                             (x.d ? '<div class="sub dir">' + esc(x.d) + '</div>' : '') +
                             (aviso ? '<div class="sub alerta">' + esc(aviso) + '</div>' : '') +
@@ -857,8 +899,8 @@
             rutas.splice(+b.dataset.ri, 1); guardarRutas(); return pintarRutas();
         }
         if (accion === 'registrar') {
-            var x = infoLote(b.dataset.id);
-            abrir({ MICRORRUTA: x.mr, LOTE: x.lote, CUADRILLA: ruta.cuad, 'FECHA DE EJECUCIÓN': aTexto(ruta.fecha) });
+            var x = infoLote(b.dataset.id), parada = ruta.paradas.find(function (p) { return p.id === b.dataset.id; }) || {};
+            abrir({ MICRORRUTA: x.mr, LOTE: x.lote, CUADRILLA: ruta.cuad, 'FECHA DE EJECUCIÓN': aTexto(parada.fecha || '') });
             if (x.mr) completar(x.mr);
             return;
         }
@@ -909,12 +951,16 @@
     $('ruta-crear').onclick = function () {
         var p = parsearMensaje($('ruta-texto').value);
         if (!p.lotes.length) return;
-        rutas.unshift({ fecha: $('ruta-fecha').value, cuad: $('ruta-cuad').value.trim().replace(/^C/i, ''), lotes: p.lotes, creada: hoy() });
+        var cuad = $('ruta-cuad').value.trim().replace(/^C/i, ''), fecha = $('ruta-fecha').value;
+        var existia = rutas.some(function (r) { return r.cuad === cuad; });
+        var ruta = agregarParadas(cuad, p.lotes.map(function (id) { return { id: id, fecha: fecha, creada: hoy() }; }));
+        ordenar(ruta, posicion);
         guardarRutas();
         $('dlg-ruta').close();
         pintarRutas();
-        toast('Pre-ruta creada con ' + p.lotes.length + ' lote' + (p.lotes.length === 1 ? '' : 's') + '. Use "Ordenar por cercanía" para empezar.');
-        $('ruta').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        toast((existia ? 'Se sumaron a la cuadrilla ' + cuad + ' y se reordenó la ruta' : 'Pre-ruta creada y ordenada') + ' · ' + ruta.paradas.length + ' lotes.');
+        var tarjeta = $('ruta').querySelectorAll('.ruta-card')[rutas.indexOf(ruta)];
+        if (tarjeta) tarjeta.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
     pintarRutas();
 
