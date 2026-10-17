@@ -2003,5 +2003,20 @@ function updateSelect(id, values){
             updateDynamicFilters();
         </script>        
         <script src="js/buscar_direccion.js"></script>
+        <script>
+            // Búsqueda directa desde otras páginas: index.html?lote=975 o index.html?mr=Z4CC0155
+            (function(){
+                var q = new URLSearchParams(location.search), lote = (q.get('lote') || '').trim(), mr = (q.get('mr') || '').trim();
+                if(!lote && !mr) return;
+                var tipo = lote ? 'lote' : 'microruta', valor = lote || mr;
+                Array.prototype.forEach.call(document.getElementById('search-types').options, function(o){ o.selected = o.value === tipo; });
+                document.getElementById('search-values').value = valor;
+                buscarValoresSeleccionados();
+                if(!lote) return;
+                layer_zonasverdes__areas_zonas_verdes_2.eachLayer(function(layer){
+                    if(String(layer.feature.properties.No_Lote == null ? '' : layer.feature.properties.No_Lote).trim().toLowerCase() === lote.toLowerCase()) layer.openPopup();
+                });
+            })();
+        </script>
     </body>
 </html>

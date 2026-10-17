@@ -8,6 +8,7 @@
     :root { --brand: #167a55; --brand-dark: #0f6847; --ink: #1f2937; --muted: #64748b; --line: #dce4e8; --surface: #ffffff; --bg: #f3f6f5;
             --pend: #b91c1c; --pend-bg: #fee2e2; --ok: #15803d; --ok-bg: #dcfce7; --sn: #1d4ed8; --sn-bg: #dbeafe; }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: var(--ink); background: var(--bg); font-size: 14px; }
     header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
     header h1 { margin: 0; font-size: 19px; flex: 1; min-width: 200px; }
@@ -76,6 +77,24 @@
     #wa-texto { display: block; width: 100%; min-height: 190px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: inherit; font-size: 15px; color: var(--ink); resize: vertical; }
     .wa { color: #fff; background: #1f9d55; }
     .detalle .wa-btn { width: 100%; padding: 11px; margin-top: 8px; }
+    /* Buscador de microrruta / lote (reemplaza el datalist, que en el celular casi no se ve) */
+    .buscador { position: relative; }
+    .sugerencias { position: absolute; left: 0; right: 0; top: 100%; z-index: 30; margin-top: 4px; background: #fff; border: 1px solid #b8c6cd; border-radius: 10px;
+                   box-shadow: 0 10px 28px rgba(15, 45, 35, .22); max-height: min(340px, 50dvh); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .sugerencias button { display: block; width: 100%; text-align: left; background: #fff; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 10px 12px; font-weight: 400; color: var(--ink); }
+    .sugerencias button:last-child { border-bottom: 0; }
+    .sugerencias button:hover, .sugerencias button.activa { background: #edf8f3; }
+    .sugerencias .s-mr { font-weight: 700; font-size: 15px; }
+    .sugerencias .s-mr small { font-weight: 600; color: var(--muted); font-size: 12px; margin-left: 6px; }
+    .sugerencias .s-dir { display: block; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+    .sugerencias mark { background: #fef08a; color: inherit; border-radius: 2px; }
+    .sugerencias .s-vacio { padding: 12px; color: var(--muted); font-size: 13px; }
+    .ir-mapa { margin-bottom: 12px; }
+    .ir-mapa input { width: 100%; min-height: 42px; border: 1px solid #b8c6cd; border-radius: 10px; padding: 8px 12px 8px 36px; font: inherit; color: var(--ink);
+                     background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%23167a55' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.5'/%3E%3C/svg%3E") no-repeat 11px center; }
+    .ir-mapa .s-ir { float: right; font-size: 12px; font-weight: 650; color: var(--brand); }
+    .enlace-mapa { color: var(--brand); font-weight: 650; text-decoration: none; white-space: nowrap; }
+    .limpiar { position: absolute; right: 4px; bottom: 4px; width: 32px; height: 32px; padding: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; }
     /* Lista compacta para celular: solo lo importante y "Ver detalles" despliega el resto */
     .movil { display: none; }
     .visita { border-bottom: 1px solid var(--line); }
@@ -127,7 +146,9 @@
         dialog form { padding: 16px 16px 0; }
         .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
         /* 16px evita que iOS haga zoom al tocar un campo */
-        label input, label select, label textarea, .filtros input, .filtros select { font-size: 16px; }
+        label input, label select, label textarea, .filtros input, .filtros select, .ir-mapa input { font-size: 16px; }
+        label input, label select, label textarea { border-color: #b8c6cd; min-height: 44px; }
+        .sugerencias button { padding: 12px 14px; }
         input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; text-align: left; }
         input[type="date"]::-webkit-date-and-time-value { text-align: left; }
         legend { white-space: normal; }
@@ -150,6 +171,10 @@
     <button type="button" class="primario" id="btn-nuevo">+ Nueva visita</button>
 </header>
 <main>
+    <div class="buscador ir-mapa">
+        <input id="ir-mapa" data-buscar="mr" type="search" placeholder="Ir al mapa: lote, microrruta o dirección" aria-label="Buscar lote en el mapa"
+               autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go">
+    </div>
     <div id="aviso"></div>
     <div class="resumen" id="resumen"></div>
     <div class="filtros">
@@ -167,8 +192,13 @@
     <form id="form" method="dialog" autocomplete="off">
         <h2><span id="dlg-titulo">Nueva visita</span> <span class="estado" id="dlg-estado"></span></h2>
         <div class="grid">
-            <label class="doble">MICRORRUTA <input data-campo="MICRORRUTA" list="lista-mr" placeholder="Ej.: Z2CC0067"></label>
-            <label>LOTE <input data-campo="LOTE"></label>
+            <div class="doble buscador">
+                <label>MICRORRUTA <input data-campo="MICRORRUTA" data-buscar="mr" placeholder="Microrruta, lote o dirección" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
+                <button type="button" class="limpiar" data-limpiar aria-label="Borrar microrruta y lote" hidden>×</button>
+            </div>
+            <div class="buscador">
+                <label>LOTE <input data-campo="LOTE" data-buscar="lote" inputmode="numeric" placeholder="N.º de lote" enterkeyhint="search"></label>
+            </div>
             <label>ÁREA M2 <input data-campo="ÁREA M2"></label>
             <div class="direccion sub" id="dlg-direccion"></div>
             <label>ZONA <input data-campo="ZONA"></label>
@@ -212,7 +242,6 @@
         </div>
     </div>
 </dialog>
-<datalist id="lista-mr"></datalist>
 <div class="toast" id="toast"></div>
 
 <script src="js/subsanaciones_config.js"></script>
@@ -384,6 +413,7 @@
         var enNo = itemsEnNo(r), d = r.ESTADO === 'PENDIENTE' ? dias(r['FECHA DE LA VISITA']) : null;
         var dato = function (tit, html, ancho) { return html ? '<div' + (ancho ? ' class="ancho"' : '') + '><dt>' + tit + '</dt><dd>' + html + '</dd></div>' : ''; };
         return '<div class="detalle"><dl>' +
+            dato('Mapa', r.MICRORRUTA || r.LOTE ? '<a class="enlace-mapa" href="' + esc(urlMapa(r.MICRORRUTA, r.LOTE)) + '">Ver en mapa ›</a>' : '') +
             dato('Zona', esc(r.ZONA)) + dato('Cuadrilla', esc(r.CUADRILLA)) +
             dato('Interventor', esc(r.INTERVENTOR)) + dato('Ejecución', esc(r['FECHA DE EJECUCIÓN'])) +
             dato('Área m2', esc(r['ÁREA M2'])) +
@@ -453,8 +483,10 @@
         }).join('') : '<div class="sub">No hay ítems activos en la hoja "Items".</div>';
     }
     function mostrarDireccion() {
-        var p = LOTES[form.querySelector('[data-campo="MICRORRUTA"]').value.trim().toUpperCase()];
-        $('dlg-direccion').textContent = p && p.d ? 'Dirección: ' + p.d : '';
+        var mr = form.querySelector('[data-campo="MICRORRUTA"]').value.trim().toUpperCase(), p = LOTES[mr];
+        // target _blank: no perder lo que se lleva escrito en el formulario
+        $('dlg-direccion').innerHTML = p ? (p.d ? 'Dirección: ' + esc(p.d) + ' · ' : '') +
+            '<a class="enlace-mapa" target="_blank" rel="noopener" href="' + esc(urlMapa(mr, p.lote)) + '">Ver en mapa ›</a>' : '';
     }
     function abrir(r) {
         editando = r && r.ID ? r : null;
@@ -474,6 +506,7 @@
         }
         pintarItems(r, !editando);
         mostrarDireccion();
+        actualizarLimpiar();
         actualizarEstadoForm();
         dlg.showModal();
     }
@@ -528,7 +561,101 @@
     // Autocompletar con la programación de microrrutas (data/direcciones_lotes.js)
     var mrPorLote = {};
     Object.keys(LOTES).forEach(function (mr) { if (LOTES[mr].lote && !mrPorLote[LOTES[mr].lote]) mrPorLote[LOTES[mr].lote] = mr; });
-    $('lista-mr').innerHTML = Object.keys(LOTES).sort().map(function (mr) { return '<option value="' + esc(mr) + '">Lote ' + esc(LOTES[mr].lote) + '</option>'; }).join('');
+    // Índice para el buscador: microrruta, lote, cuadrilla y dirección ya normalizados
+    var indice = Object.keys(LOTES).sort().map(function (mr) {
+        var p = LOTES[mr], lote = p.lote && p.lote !== 'NA' ? String(p.lote) : '';
+        return { mr: mr, lote: lote, cuad: p.cuad || '', d: p.d || '', nmr: norm(mr), nd: norm(p.d) };
+    });
+    function buscar(q, modo) {
+        q = norm(q);
+        if (!q) return [];
+        var qmr = q.replace(/\s+/g, ''), res = [];
+        indice.forEach(function (x) {
+            var p = -1;
+            if (x.nmr === qmr || x.lote === q) p = 0;
+            else if (x.lote && x.lote.indexOf(q) === 0) p = 1;
+            else if (modo === 'mr' && x.nmr.indexOf(qmr) === 0) p = 1;
+            else if (modo === 'mr' && x.nmr.indexOf(qmr) !== -1) p = 2;
+            else if (modo === 'mr' && q.length >= 3 && x.nd.indexOf(q) !== -1) p = 3;
+            if (p !== -1) res.push({ x: x, p: p });
+        });
+        res.sort(function (a, b) { return a.p - b.p || a.x.mr.localeCompare(b.x.mr); });
+        return res.slice(0, 40).map(function (r) { return r.x; });
+    }
+    function resaltar(texto, q) {
+        var t = esc(texto), n = norm(q);
+        if (!n) return t;
+        var i = norm(texto).indexOf(n);
+        // norm() conserva la longitud salvo espacios repetidos; si no cuadra, no resalta
+        return i === -1 || norm(texto).length !== String(texto).length ? t : esc(texto.slice(0, i)) + '<mark>' + esc(texto.slice(i, i + n.length)) + '</mark>' + esc(texto.slice(i + n.length));
+    }
+    var caja = document.createElement('div');
+    caja.className = 'sugerencias';
+    caja.hidden = true;
+    var activo = null, marcada = -1;
+    function cerrarSugerencias() { caja.hidden = true; marcada = -1; }
+    function mostrarSugerencias(input) {
+        activo = input;
+        var q = input.value.trim(), lista = buscar(q, input.dataset.buscar);
+        input.closest('.buscador').appendChild(caja);
+        if (!q) return cerrarSugerencias();
+        marcada = -1;
+        caja.innerHTML = lista.length ? lista.map(function (x) {
+            return '<button type="button" data-mr="' + esc(x.mr) + '" data-lote="' + esc(x.lote) + '">' +
+                (input.id === 'ir-mapa' ? '<span class="s-ir">Ver en mapa ›</span>' : '') + '<span class="s-mr">' + resaltar(x.mr, q) +
+                '<small>' + (x.lote ? 'Lote ' + resaltar(x.lote, q) : 'Sin lote') + (x.cuad ? ' · C' + esc(x.cuad) : '') + '</small></span>' +
+                (x.d ? '<span class="s-dir">' + resaltar(x.d, q) + '</span>' : '') + '</button>';
+        }).join('') : '<div class="s-vacio">' + (input.id === 'ir-mapa' ? 'Sin coincidencias. Pulse Ir/Enter para buscarlo igual en el mapa.' : 'Sin coincidencias. Puede escribirla igual y guardar.') + '</div>';
+        caja.hidden = false;
+        caja.scrollTop = 0;
+    }
+    function urlMapa(mr, lote) { return 'index.html?' + (lote && lote !== 'NA' ? 'lote=' + encodeURIComponent(lote) : 'mr=' + encodeURIComponent(mr)); }
+    function elegir(mr, lote) {
+        if (activo && activo.id === 'ir-mapa') { location.href = urlMapa(mr, lote); return; }
+        var mrEl = form.querySelector('[data-campo="MICRORRUTA"]');
+        mrEl.value = mr;
+        completar(mr);
+        cerrarSugerencias();
+        actualizarLimpiar();
+        if (activo) activo.blur(); // cierra el teclado del celular
+    }
+    function actualizarLimpiar() { form.querySelector('[data-limpiar]').hidden = !form.querySelector('[data-campo="MICRORRUTA"]').value; }
+    // pointerdown + preventDefault: el toque no le quita el foco al campo antes de elegir
+    caja.addEventListener('pointerdown', function (ev) { ev.preventDefault(); });
+    caja.addEventListener('click', function (ev) { var b = ev.target.closest('[data-mr]'); if (b) elegir(b.dataset.mr, b.dataset.lote); });
+    document.querySelectorAll('[data-buscar]').forEach(function (input) {
+        input.addEventListener('input', function () { mostrarSugerencias(input); actualizarLimpiar(); });
+        input.addEventListener('focus', function () { if (input.value.trim()) mostrarSugerencias(input); });
+        input.addEventListener('blur', function () { setTimeout(cerrarSugerencias, 150); });
+        input.addEventListener('keydown', function (ev) {
+            var bs = caja.hidden ? [] : caja.querySelectorAll('[data-mr]');
+            if (ev.key === 'Escape' && !caja.hidden) { ev.preventDefault(); ev.stopPropagation(); return cerrarSugerencias(); }
+            if (!bs.length) {
+                // Sin sugerencias: desde "Ir al mapa" igual se busca lo escrito (número = lote, texto = microrruta)
+                var v = input.value.trim();
+                if (ev.key === 'Enter' && input.id === 'ir-mapa' && v) location.href = /^\d+$/.test(v) ? urlMapa('', v) : urlMapa(v.toUpperCase().replace(/\s+/g, ''), '');
+                return;
+            }
+            if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+                ev.preventDefault();
+                marcada = (marcada + (ev.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length;
+                bs.forEach(function (b, i) { b.classList.toggle('activa', i === marcada); });
+                bs[marcada].scrollIntoView({ block: 'nearest' });
+            } else if (ev.key === 'Enter') {
+                ev.preventDefault(); // no enviar el formulario al buscar
+                var b = bs[marcada === -1 ? 0 : marcada];
+                elegir(b.dataset.mr, b.dataset.lote);
+            }
+        });
+    });
+    form.querySelector('[data-limpiar]').onclick = function () {
+        ['MICRORRUTA', 'LOTE', 'ÁREA M2', 'ZONA', 'CUADRILLA'].forEach(function (c) { form.querySelector('[data-campo="' + c + '"]').value = ''; });
+        mostrarDireccion();
+        actualizarLimpiar();
+        form.querySelector('[data-campo="MICRORRUTA"]').focus();
+    };
+    dlg.addEventListener('close', cerrarSugerencias);
+
     function completar(mr) {
         var p = LOTES[mr];
         if (!p) return;
