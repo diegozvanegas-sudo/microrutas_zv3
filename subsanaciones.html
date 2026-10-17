@@ -123,6 +123,10 @@
     .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
     .contexto { margin: -4px 0 14px; padding: 10px 12px; border-radius: 10px; background: #edf8f3; border-left: 4px solid var(--brand); font-size: 13px; line-height: 1.45; }
     .contexto b { font-size: 15px; }
+    .contexto .desc { margin-top: 4px; color: #475569; max-height: 4.4em; overflow: hidden; }
+    .contexto .desc.abierta { max-height: none; }
+    .contexto .historial { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #9fd3bd; }
+    .contexto button { margin-top: 6px; }
     .ir-mapa { margin-bottom: 12px; }
     .ir-mapa input { width: 100%; min-height: 42px; border: 1px solid #b8c6cd; border-radius: 10px; padding: 8px 12px 8px 36px; font: inherit; color: var(--ink);
                      background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%23167a55' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.5'/%3E%3C/svg%3E") no-repeat 11px center; }
@@ -552,6 +556,8 @@
         $('dlg-direccion').innerHTML = p ? (p.d ? 'Dirección: ' + esc(p.d) + ' · ' : '') +
             '<a class="enlace-mapa" target="_blank" rel="noopener" href="' + esc(urlMapa(mr, p.lote)) + '">Ver en mapa ›</a>' : '';
     }
+    // registros va de la visita más reciente a la más antigua
+    function ultimoValor(campo) { var r = registros.find(function (x) { return String(x[campo] || '').trim(); }); return r ? String(r[campo]).trim() : ''; }
     function abrir(r, contexto) {
         desdeRuta = contexto || null;
         $('dlg-contexto').innerHTML = contexto ? contexto.html : '';
@@ -567,15 +573,15 @@
         if (!editando) {
             if (!r['FECHA DE LA VISITA']) form.querySelector('[data-campo="FECHA DE LA VISITA"]').value = hoy();
             try {
-                form.querySelector('[data-campo="REGISTRADO POR"]').value = localStorage.getItem('subsanaciones_usuario') || '';
-                form.querySelector('[data-campo="INTERVENTOR"]').value = localStorage.getItem('subsanaciones_interventor') || '';
+                form.querySelector('[data-campo="REGISTRADO POR"]').value = localStorage.getItem('subsanaciones_usuario') || ultimoValor('REGISTRADO POR');
+                form.querySelector('[data-campo="INTERVENTOR"]').value = localStorage.getItem('subsanaciones_interventor') || ultimoValor('INTERVENTOR');
             } catch (e) {}
         }
         pintarItems(r, !editando);
         mostrarDireccion();
         actualizarLimpiar();
         actualizarEstadoForm();
-        dlg.showModal();
+        if (!dlg.open) dlg.showModal();
         dlg.scrollTop = 0; // el celular recuerda dónde quedó la ventana anterior
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     }
@@ -829,6 +835,30 @@
         var mr = LOTES[id] ? id : mrPorLote[id] || '', p = LOTES[mr] || {};
         return { id: id, mr: mr, lote: LOTES[id] ? '' : id, cuad: p.cuad || '', d: p.d || '', c: CENTROS[id] || null };
     }
+    // Descripción y frecuencia de la programación, y la última visita registrada de ese lote
+    function fichaLote(x) {
+        var p = LOTES[x.mr] || {}, html = '';
+        if (p.frec || p.area) html += '<br>' + (p.frec ? 'Frecuencia ' + esc(p.frec) : '') + (p.frec && p.area ? ' · ' : '') + (p.area ? esc(Number(p.area).toLocaleString('es-CO')) + ' m²' : '');
+        if (p.desc) html += '<div class="desc" data-desc title="Toque para ver completa">' + esc(p.desc) + '</div>';
+        var previas = registros.filter(function (r) {
+            return x.lote ? String(r.LOTE || '').trim() === x.lote : String(r.MICRORRUTA || '').trim().toUpperCase() === x.mr;
+        });
+        if (!previas.length) return html + '<div class="historial">Sin visitas anteriores registradas.</div>';
+        var u = previas[0], enNo = itemsEnNo(u);
+        html += '<div class="historial">Última visita: <b style="font-size:13px">' + esc(u['FECHA DE LA VISITA'] || '—') + '</b> ' + badge(u.ESTADO) +
+            (u.INTERVENTOR ? ' · ' + esc(u.INTERVENTOR) : '') + (previas.length > 1 ? ' · ' + previas.length + ' visitas en total' : '') +
+            (enNo.length ? '<br>Ítems en NO: ' + enNo.map(esc).join(', ') : '') +
+            (u['OBSERVACIONES NOVEDADES'] && norm(u['OBSERVACIONES NOVEDADES']) !== 'SIN NOVEDAD' ? '<br>Observaciones: ' + esc(u['OBSERVACIONES NOVEDADES']) : '') +
+            (u.ESTADO === 'PENDIENTE' ? '<br><button type="button" class="secundario pequeno" data-abrir-visita="' + esc(u.ID) + '">Abrir esa visita para subsanarla</button>' : '') +
+            '</div>';
+        return html;
+    }
+    $('dlg-contexto').addEventListener('click', function (ev) {
+        var d = ev.target.closest('[data-desc]');
+        if (d) return d.classList.toggle('abierta');
+        var b = ev.target.closest('[data-abrir-visita]');
+        if (b) abrir(registros.find(function (r) { return r.ID === b.dataset.abrirVisita; }));
+    });
     function visitaDe(p, x) {
         return registros.find(function (r) {
             var mismo = x.lote ? String(r.LOTE || '').trim() === x.lote : String(r.MICRORRUTA || '').trim().toUpperCase() === x.mr;
@@ -956,7 +986,8 @@
                     ri: ri,
                     html: '📍 Pre-ruta' + (ruta.cuad ? ' cuadrilla ' + esc(ruta.cuad) : '') + ' · parada ' + (n + 1) + ' de ' + ruta.paradas.length + '<br>' +
                         '<b>' + esc(x.lote ? 'Lote ' + x.lote : x.mr) + '</b>' + (x.lote && x.mr ? ' · ' + esc(x.mr) : '') +
-                        (parada.fecha ? ' · ejecutado ' + esc(aTexto(parada.fecha)) : '') + (x.d ? '<br>' + esc(x.d) : '')
+                        (parada.fecha ? ' · ejecutado ' + esc(aTexto(parada.fecha)) : '') + (x.d ? '<br>' + esc(x.d) : '') +
+                        fichaLote(x)
                 });
                 if (x.mr) completar(x.mr);
                 // completar() pone la cuadrilla de la programación; se respeta la del mensaje si vino
