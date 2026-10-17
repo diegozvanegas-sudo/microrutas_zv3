@@ -49,6 +49,15 @@ Cambiar los ítems de revisión
   "Subsanaciones" al guardar). Poner "NO" lo oculta del formulario sin borrar lo ya registrado.
   Después de cambiar ítems, pulse "Actualizar" en la página.
 
+Pre-rutas compartidas (pestaña "Rutas")
+- Las pre-rutas (lotes que mandan a revisar) se guardan en la pestaña "Rutas" de la misma hoja, una fila
+  por lote: CUADRILLA, LOTE, FECHA DE EJECUCIÓN, ORDEN, CARGADA. Así se ven en cualquier celular.
+- Quien manda los lotes puede: pegar el mensaje en la página (botón "Cargar lotes a revisar") o escribir
+  filas a mano en "Rutas" con CUADRILLA, LOTE y FECHA DE EJECUCIÓN (dd/mm/aaaa). Al abrir la página
+  esos lotes se ordenan por cercanía y se guarda el orden.
+- Requiere actualizar el Apps Script (pegar de nuevo apps_script/Code.gs y publicar nueva versión, ver abajo).
+  Mientras no se actualice, la pre-ruta sigue funcionando pero solo en el celular donde se cargó.
+
 Si cambia el código del Apps Script
 - Implementar > Administrar implementaciones > editar (lápiz) > Versión: Nueva versión > Implementar.
   Así la URL sigue siendo la misma.

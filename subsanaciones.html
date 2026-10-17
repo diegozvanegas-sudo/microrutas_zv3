@@ -198,6 +198,7 @@
 <header>
     <h1>Subsanaciones de lotes</h1>
     <a class="volver" href="index.html">← Volver al mapa</a>
+    <a class="volver" href="mapa_rapido.html">⚡ Mapa rápido</a>
     <div class="acciones-top">
         <a class="boton secundario" id="abrir-hoja" target="_blank" hidden>Abrir hoja en Drive</a>
         <button type="button" class="secundario" id="btn-excel">Descargar Excel</button>
@@ -388,6 +389,7 @@
             });
             llenarSelect('f-zona', 'ZONA', 'Todas las zonas');
             llenarSelect('f-cuadrilla', 'CUADRILLA', 'Todas las cuadrillas');
+            if (d.rutas) rutasDeHoja(d.rutas);
             pintar();
             abrirDesdeUrl();
         }).catch(function (err) {
@@ -665,7 +667,7 @@
         caja.hidden = false;
         caja.scrollTop = 0;
     }
-    function urlMapa(mr, lote) { return 'index.html?' + (lote && lote !== 'NA' ? 'lote=' + encodeURIComponent(lote) : 'mr=' + encodeURIComponent(mr)); }
+    function urlMapa(mr, lote) { return 'mapa_rapido.html?' + (lote && lote !== 'NA' ? 'lote=' + encodeURIComponent(lote) : 'mr=' + encodeURIComponent(mr)); }
     function elegir(mr, lote) {
         if (activo && activo.id === 'ir-mapa') { location.href = urlMapa(mr, lote); return; }
         var mrEl = form.querySelector('[data-campo="MICRORRUTA"]');
@@ -747,7 +749,39 @@
     var CENTROS = window.centrosLotes || {};
     // Una ruta por cuadrilla: { cuad, paradas: [{ id, fecha (ejecución), creada }] }
     var rutas = [], posicion = null;
+    // modoHoja: el Apps Script ya tiene la pestaña "Rutas" y la pre-ruta se comparte entre celulares.
+    // Sin eso (script viejo o sin conexión) se trabaja solo con la copia de este celular.
+    var modoHoja = false;
     function guardarRutas() { try { localStorage.setItem('subsanaciones_rutas', JSON.stringify(rutas)); } catch (e) {} }
+    function subirRuta(ruta) {
+        if (!modoHoja) return;
+        enviar('guardar_ruta', { cuadrilla: ruta.cuad, paradas: ruta.paradas.map(function (p) { return { lote: p.id, fecha: aTexto(p.fecha), cargada: aTexto(p.creada) }; }) })
+            .catch(function (err) { toast('La pre-ruta quedó en este celular pero no en la hoja: ' + err.message); });
+    }
+    function rutasDeHoja(lista) {
+        modoHoja = true;
+        var locales = rutas;
+        // La primera vez, lo que estaba solo en este celular se sube a la hoja (una sola vez, para no revivir rutas que otro quitó)
+        var migrar = false;
+        try { migrar = !localStorage.getItem('subsanaciones_rutas_en_hoja'); localStorage.setItem('subsanaciones_rutas_en_hoja', '1'); } catch (e) {}
+        rutas = [];
+        lista.slice().sort(function (a, b) {
+            return a.cuadrilla.localeCompare(b.cuadrilla, 'es', { numeric: true }) || (Number(a.orden) || 1e9) - (Number(b.orden) || 1e9);
+        }).forEach(function (r) {
+            var id = /^\d+$/.test(r.lote) ? String(+r.lote) : r.lote;
+            agregarParadas(r.cuadrilla, [{ id: id, fecha: aInput(r.fecha), creada: aInput(r.cargada) || hoy() }]);
+        });
+        if (migrar) locales.forEach(function (l) {
+            var ruta = agregarParadas(l.cuad, l.paradas);
+            ordenar(ruta, posicion);
+            subirRuta(ruta);
+        });
+        // Lotes escritos a mano en la hoja (sin ORDEN): se ordenan por cercanía y se guarda el orden
+        var sinOrden = {};
+        lista.forEach(function (r) { if (!r.orden) sinOrden[r.cuadrilla] = true; });
+        rutas.forEach(function (ruta) { if (sinOrden[ruta.cuad]) { ordenar(ruta, posicion); subirRuta(ruta); } });
+        guardarRutas();
+    }
     function agregarParadas(cuad, nuevas) {
         var ruta = rutas.find(function (r) { return r.cuad === cuad; });
         if (!ruta) { ruta = { cuad: cuad, paradas: [] }; rutas.push(ruta); }
@@ -862,7 +896,7 @@
                 '<div class="ruta-acciones">' +
                     (pend.length > 1 ? '<button type="button" class="secundario pequeno" data-ruta="ordenar" data-ri="' + ri + '">📍 Ordenar desde mi ubicación</button>' : '') +
                     (gmaps ? '<a class="boton primario pequeno" target="_blank" rel="noopener" href="' + esc(gmaps) + '">Ruta en Google Maps' + (pend.length > proximas.length ? ' (próximos ' + proximas.length + ')' : '') + '</a>' : '') +
-                    (conLote.length ? '<a class="boton secundario pequeno" href="' + esc('index.html?lote=' + conLote.join(',')) + '">Ver todos en el mapa</a>' : '') +
+                    (conLote.length ? '<a class="boton secundario pequeno" href="' + esc('mapa_rapido.html?lote=' + conLote.join(',')) + '">Ver todos en el mapa</a>' : '') +
                 '</div>' +
                 '<ol class="paradas">' + paradas.map(function (x, i) {
                     var dist = prev && x.c ? textoDist(metros(prev, x.c)) + (prevUsted ? ' de usted' : ' de la anterior') : '';
@@ -896,7 +930,7 @@
         if (accion === 'nueva') return abrirDlgRuta();
         if (accion === 'quitar') {
             if (!confirm('¿Quitar esta pre-ruta? Las visitas registradas no se borran.')) return;
-            rutas.splice(+b.dataset.ri, 1); guardarRutas(); return pintarRutas();
+            rutas.splice(+b.dataset.ri, 1); guardarRutas(); subirRuta({ cuad: ruta.cuad, paradas: [] }); return pintarRutas();
         }
         if (accion === 'registrar') {
             var x = infoLote(b.dataset.id), parada = ruta.paradas.find(function (p) { return p.id === b.dataset.id; }) || {};
@@ -905,7 +939,7 @@
             return;
         }
         if (accion === 'ordenar') {
-            var listo = function (desde) { ordenar(ruta, desde); guardarRutas(); pintarRutas(); };
+            var listo = function (desde) { ordenar(ruta, desde); guardarRutas(); subirRuta(ruta); pintarRutas(); };
             if (!navigator.geolocation) return listo(null);
             b.disabled = true; b.textContent = 'Ubicando…';
             navigator.geolocation.getCurrentPosition(function (p) {
@@ -956,6 +990,7 @@
         var ruta = agregarParadas(cuad, p.lotes.map(function (id) { return { id: id, fecha: fecha, creada: hoy() }; }));
         ordenar(ruta, posicion);
         guardarRutas();
+        subirRuta(ruta);
         $('dlg-ruta').close();
         pintarRutas();
         toast((existia ? 'Se sumaron a la cuadrilla ' + cuad + ' y se reordenó la ruta' : 'Pre-ruta creada y ordenada') + ' · ' + ruta.paradas.length + ' lotes.');
