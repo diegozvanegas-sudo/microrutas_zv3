@@ -89,6 +89,38 @@
     .sugerencias .s-dir { display: block; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
     .sugerencias mark { background: #fef08a; color: inherit; border-radius: 2px; }
     .sugerencias .s-vacio { padding: 12px; color: var(--muted); font-size: 13px; }
+    /* Pre-ruta: lotes que mandan a revisar */
+    .ruta { margin-bottom: 12px; display: grid; gap: 10px; justify-items: start; }
+    .ruta > * { width: 100%; }
+    .ruta > .otra { width: auto; }
+    .ruta-vacia { text-align: left; background: #fff; border: 2px dashed #9fd3bd; color: var(--ink); padding: 14px 16px; border-radius: 12px; font-weight: 400; }
+    .ruta-vacia .sub { display: block; margin-top: 2px; }
+    .ruta-card { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: 12px; overflow: hidden; }
+    .ruta-cab { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px 8px; }
+    .ruta-cab > div { flex: 1; min-width: 0; }
+    .ruta-cab b { font-size: 16px; }
+    .ruta-quitar { background: transparent; color: var(--muted); padding: 4px 8px; font-size: 20px; line-height: 1; }
+    .progreso { height: 6px; background: #e8efec; margin: 0 14px; border-radius: 99px; overflow: hidden; }
+    .progreso span { display: block; height: 100%; background: var(--ok); }
+    .ruta-acciones { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; }
+    .paradas { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+    .parada { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 4px 10px; align-items: start; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+    .parada:last-child { border-bottom: 0; }
+    .parada .n { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 13px; background: #e8efec; }
+    .parada.siguiente { background: #f2fbf7; }
+    .parada.siguiente .n { background: var(--brand); color: #fff; }
+    .parada.hecha .n { background: var(--ok-bg); color: var(--ok); }
+    .parada.hecha .titulo b { color: var(--muted); }
+    .parada .dir { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .parada .alerta { color: var(--pend); }
+    .parada .btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .tag-sig { font-size: 11px; font-weight: 700; color: #fff; background: var(--brand); padding: 1px 7px; border-radius: 99px; }
+    .chip-ruta { display: inline-block; margin: 6px 6px 0 0; padding: 4px 9px; border-radius: 8px; background: #edf8f3; font-size: 13px; }
+    .chip-ruta.aviso { background: #fff7ed; color: #9a3412; }
+    #dlg-ruta { width: min(560px, calc(100% - 24px)); height: auto; margin: auto; border-radius: 14px; }
+    #dlg-ruta .cuerpo { padding: 18px; }
+    #ruta-texto { min-height: 140px; }
+    .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
     .ir-mapa { margin-bottom: 12px; }
     .ir-mapa input { width: 100%; min-height: 42px; border: 1px solid #b8c6cd; border-radius: 10px; padding: 8px 12px 8px 36px; font: inherit; color: var(--ink);
                      background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%23167a55' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.5'/%3E%3C/svg%3E") no-repeat 11px center; }
@@ -149,6 +181,9 @@
         label input, label select, label textarea, .filtros input, .filtros select, .ir-mapa input { font-size: 16px; }
         label input, label select, label textarea { border-color: #b8c6cd; min-height: 44px; }
         .sugerencias button { padding: 12px 14px; }
+        .parada { grid-template-columns: 30px minmax(0, 1fr); }
+        .parada .btns { grid-column: 2; justify-content: flex-start; }
+        .parada .btns > *, .ruta-acciones > * { padding: 9px 12px; font-size: 13px; }
         input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; text-align: left; }
         input[type="date"]::-webkit-date-and-time-value { text-align: left; }
         legend { white-space: normal; }
@@ -171,6 +206,7 @@
     <button type="button" class="primario" id="btn-nuevo">+ Nueva visita</button>
 </header>
 <main>
+    <section class="ruta" id="ruta" aria-label="Pre-ruta del día"></section>
     <div class="buscador ir-mapa">
         <input id="ir-mapa" data-buscar="mr" type="search" placeholder="Ir al mapa: lote, microrruta o dirección" aria-label="Buscar lote en el mapa"
                autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go">
@@ -242,10 +278,29 @@
         </div>
     </div>
 </dialog>
+<dialog id="dlg-ruta">
+    <div class="cuerpo">
+        <h2>Lotes a revisar</h2>
+        <label>MENSAJE CON LOTES
+            <textarea id="ruta-texto" placeholder="Lotes ejecutados el 14-10-2026 por la cuadrilla #2&#10;&#10;532&#10;371&#10;363"></textarea>
+        </label>
+        <button type="button" class="secundario pequeno" id="ruta-pegar" style="margin-top:6px">Pegar del portapapeles</button>
+        <div class="dos">
+            <label>FECHA DE EJECUCIÓN <input type="date" id="ruta-fecha"></label>
+            <label>CUADRILLA <input id="ruta-cuad" inputmode="numeric"></label>
+        </div>
+        <div id="ruta-vista" style="margin-top:10px"></div>
+        <div class="pie">
+            <button type="button" class="secundario" id="ruta-cancelar">Cancelar</button>
+            <button type="button" class="primario" id="ruta-crear">Crear pre-ruta</button>
+        </div>
+    </div>
+</dialog>
 <div class="toast" id="toast"></div>
 
 <script src="js/subsanaciones_config.js"></script>
 <script src="data/direcciones_lotes.js"></script>
+<script src="data/centros_lotes.js"></script>
 <script>
 (function () {
     var CFG = window.SUBSANACIONES_CONFIG || {};
@@ -362,6 +417,7 @@
     }
 
     function pintar() {
+        pintarRutas();
         var cuenta = { '': registros.length, PENDIENTE: 0, SUBSANADO: 0, 'SIN NOVEDAD': 0 };
         registros.forEach(function (r) { if (cuenta[r.ESTADO] != null) cuenta[r.ESTADO]++; });
         var est = $('f-estado').value;
@@ -686,6 +742,181 @@
         abrir({ MICRORRUTA: mr, LOTE: lote });
         if (mr) completar(mr); else if (mrPorLote[lote]) completar(mrPorLote[lote]);
     }
+
+    // ---------- Pre-ruta: lotes que mandan a revisar (se guarda en este celular) ----------
+    var CENTROS = window.centrosLotes || {};
+    var rutas = (function () { try { return JSON.parse(localStorage.getItem('subsanaciones_rutas')) || []; } catch (e) { return []; } })();
+    var posicion = null;
+    function guardarRutas() { try { localStorage.setItem('subsanaciones_rutas', JSON.stringify(rutas)); } catch (e) {} }
+
+    // "Lotes ejecutados el 14-10-2026 por la cuadrilla #2 \n 532 \n 371" -> fecha, cuadrilla y lotes
+    function parsearMensaje(texto) {
+        var t = String(texto || ''), fecha = '', cuad = '', m, lotes = [];
+        m = t.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})\b/);
+        if (m) { fecha = (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2); t = t.replace(m[0], ' '); }
+        m = t.match(/cuadrilla\s*(?:n[°º.o]*\s*)?#?\s*(\d+)/i);
+        if (m) { cuad = m[1]; t = t.replace(m[0], ' '); }
+        (t.match(/\bZ\d+[A-Z]{2}\d{3,5}\b|\b\d{1,5}\b/gi) || []).forEach(function (v) {
+            v = v.toUpperCase();
+            v = /^Z/.test(v) ? (LOTES[v] && LOTES[v].lote && LOTES[v].lote !== 'NA' ? LOTES[v].lote : v) : String(+v);
+            if (lotes.indexOf(v) === -1) lotes.push(v);
+        });
+        return { fecha: fecha, cuad: cuad, lotes: lotes };
+    }
+    // id = número de lote, o la microrruta cuando no tiene lote
+    function infoLote(id) {
+        var mr = LOTES[id] ? id : mrPorLote[id] || '', p = LOTES[mr] || {};
+        return { id: id, mr: mr, lote: LOTES[id] ? '' : id, cuad: p.cuad || '', d: p.d || '', c: CENTROS[id] || null };
+    }
+    function visitaDe(ruta, x) {
+        return registros.find(function (r) {
+            var mismo = x.lote ? String(r.LOTE || '').trim() === x.lote : String(r.MICRORRUTA || '').trim().toUpperCase() === x.mr;
+            return mismo && ((ruta.fecha && aInput(r['FECHA DE EJECUCIÓN']) === ruta.fecha) || aInput(r['FECHA DE LA VISITA']) >= ruta.creada);
+        });
+    }
+    function metros(a, b) {
+        var r = Math.PI / 180, dLat = (b[0] - a[0]) * r, dLon = (b[1] - a[1]) * r;
+        var h = Math.pow(Math.sin(dLat / 2), 2) + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.pow(Math.sin(dLon / 2), 2);
+        return 2 * 6371e3 * Math.asin(Math.sqrt(h));
+    }
+    function textoDist(m) { return m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
+    function urlIr(c) { return 'https://www.google.com/maps/dir/?api=1&destination=' + c[0] + ',' + c[1] + '&travelmode=driving'; }
+
+    // Pendientes primero, por vecino más cercano desde la ubicación (o desde el primer lote); revisados al final
+    function ordenar(ruta, desde) {
+        var pend = [], hechos = [], sinC = [];
+        ruta.lotes.forEach(function (id) { var x = infoLote(id); (visitaDe(ruta, x) ? hechos : x.c ? pend : sinC).push(id); });
+        var orden = [], actual = desde || (pend.length ? CENTROS[pend[0]] : null);
+        while (pend.length) {
+            var mejor = 0;
+            pend.forEach(function (id, i) { if (metros(actual, CENTROS[id]) < metros(actual, CENTROS[pend[mejor]])) mejor = i; });
+            actual = CENTROS[pend[mejor]];
+            orden.push(pend.splice(mejor, 1)[0]);
+        }
+        ruta.lotes = orden.concat(sinC, hechos);
+    }
+
+    function pintarRutas() {
+        var cont = $('ruta');
+        if (!rutas.length) {
+            cont.innerHTML = '<button type="button" class="ruta-vacia" data-ruta="nueva">📋 <b>Cargar lotes a revisar</b>' +
+                '<span class="sub">Pegue el mensaje de WhatsApp con los lotes y arme su pre-ruta del día.</span></button>';
+            return;
+        }
+        cont.innerHTML = rutas.map(function (ruta, ri) {
+            var paradas = ruta.lotes.map(function (id) { var x = infoLote(id); x.visita = visitaDe(ruta, x); return x; });
+            var hechas = paradas.filter(function (x) { return x.visita; }).length;
+            var pend = paradas.filter(function (x) { return !x.visita; }), sig = pend[0];
+            var proximas = pend.filter(function (x) { return x.c; }).slice(0, 4); // Google Maps en el celular admite 3 paradas + destino
+            var gmaps = proximas.length ? 'https://www.google.com/maps/dir/?api=1&destination=' + proximas[proximas.length - 1].c.join(',') +
+                (proximas.length > 1 ? '&waypoints=' + encodeURIComponent(proximas.slice(0, -1).map(function (x) { return x.c.join(','); }).join('|')) : '') + '&travelmode=driving' : '';
+            var conLote = paradas.filter(function (x) { return x.lote; }).map(function (x) { return x.lote; });
+            var prev = posicion, prevUsted = !!posicion;
+            return '<div class="ruta-card">' +
+                '<div class="ruta-cab"><div><b>' + (ruta.cuad ? 'Cuadrilla ' + esc(ruta.cuad) : 'Pre-ruta') + '</b>' +
+                    (ruta.fecha ? ' · ejecutados ' + esc(aTexto(ruta.fecha)) : '') +
+                    '<div class="sub">' + (hechas === paradas.length ? '✓ Ruta completa · ' : '') + hechas + ' de ' + paradas.length + ' revisados</div></div>' +
+                    '<button type="button" class="ruta-quitar" data-ruta="quitar" data-ri="' + ri + '" aria-label="Quitar pre-ruta">×</button></div>' +
+                '<div class="progreso"><span style="width:' + Math.round(100 * hechas / paradas.length) + '%"></span></div>' +
+                '<div class="ruta-acciones">' +
+                    (pend.length > 1 ? '<button type="button" class="secundario pequeno" data-ruta="ordenar" data-ri="' + ri + '">📍 Ordenar por cercanía</button>' : '') +
+                    (gmaps ? '<a class="boton primario pequeno" target="_blank" rel="noopener" href="' + esc(gmaps) + '">Ruta en Google Maps' + (pend.length > proximas.length ? ' (próximos ' + proximas.length + ')' : '') + '</a>' : '') +
+                    (conLote.length ? '<a class="boton secundario pequeno" href="' + esc('index.html?lote=' + conLote.join(',')) + '">Ver todos en el mapa</a>' : '') +
+                '</div>' +
+                '<ol class="paradas">' + paradas.map(function (x, i) {
+                    var dist = prev && x.c ? textoDist(metros(prev, x.c)) + (prevUsted ? ' de usted' : ' de la anterior') : '';
+                    if (x.c) { prev = x.c; prevUsted = false; }
+                    var aviso = !x.mr ? 'No está en la programación' : ruta.cuad && x.cuad && x.cuad !== ruta.cuad ? 'Programado para la cuadrilla ' + x.cuad : '';
+                    return '<li class="parada' + (x.visita ? ' hecha' : x === sig ? ' siguiente' : '') + '">' +
+                        '<span class="n">' + (x.visita ? '✓' : i + 1) + '</span>' +
+                        '<div class="info"><div class="titulo"><b>' + esc(x.lote ? 'Lote ' + x.lote : x.mr) + '</b>' +
+                            (x.lote && x.mr ? ' <span class="sub">' + esc(x.mr) + '</span>' : '') +
+                            (x === sig ? ' <span class="tag-sig">Siguiente</span>' : '') + (x.visita ? ' ' + badge(x.visita.ESTADO) : '') + '</div>' +
+                            (x.d ? '<div class="sub dir">' + esc(x.d) + '</div>' : '') +
+                            (aviso ? '<div class="sub alerta">' + esc(aviso) + '</div>' : '') +
+                            (dist && !x.visita ? '<div class="sub">📍 ' + dist + '</div>' : '') + '</div>' +
+                        '<div class="btns">' +
+                            (x.visita ? '<button type="button" class="secundario pequeno" data-editar="' + esc(x.visita.ID) + '">Ver visita</button>'
+                                      : '<button type="button" class="primario pequeno" data-ruta="registrar" data-ri="' + ri + '" data-id="' + esc(x.id) + '">Registrar</button>') +
+                            (x.c && !x.visita ? '<a class="boton secundario pequeno" target="_blank" rel="noopener" href="' + esc(urlIr(x.c)) + '">Cómo llegar</a>' : '') +
+                            (x.mr || x.lote ? '<a class="boton secundario pequeno" href="' + esc(urlMapa(x.mr, x.lote)) + '">Mapa</a>' : '') +
+                        '</div></li>';
+                }).join('') + '</ol></div>';
+        }).join('') + '<button type="button" class="secundario pequeno otra" data-ruta="nueva">+ Otra pre-ruta</button>';
+    }
+
+    $('ruta').onclick = function (ev) {
+        var ed = ev.target.closest('[data-editar]');
+        if (ed) return abrir(registros.find(function (r) { return r.ID === ed.dataset.editar; }));
+        var b = ev.target.closest('[data-ruta]');
+        if (!b) return;
+        var ruta = rutas[+b.dataset.ri], accion = b.dataset.ruta;
+        if (accion === 'nueva') return abrirDlgRuta();
+        if (accion === 'quitar') {
+            if (!confirm('¿Quitar esta pre-ruta? Las visitas registradas no se borran.')) return;
+            rutas.splice(+b.dataset.ri, 1); guardarRutas(); return pintarRutas();
+        }
+        if (accion === 'registrar') {
+            var x = infoLote(b.dataset.id);
+            abrir({ MICRORRUTA: x.mr, LOTE: x.lote, CUADRILLA: ruta.cuad, 'FECHA DE EJECUCIÓN': aTexto(ruta.fecha) });
+            if (x.mr) completar(x.mr);
+            return;
+        }
+        if (accion === 'ordenar') {
+            var listo = function (desde) { ordenar(ruta, desde); guardarRutas(); pintarRutas(); };
+            if (!navigator.geolocation) return listo(null);
+            b.disabled = true; b.textContent = 'Ubicando…';
+            navigator.geolocation.getCurrentPosition(function (p) {
+                posicion = [p.coords.latitude, p.coords.longitude];
+                listo(posicion);
+                toast('Ordenada desde su ubicación actual.');
+            }, function () {
+                listo(null);
+                toast('Sin acceso a la ubicación: se ordenó desde el primer lote.');
+            }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+        }
+    };
+
+    function abrirDlgRuta() {
+        ['ruta-texto', 'ruta-fecha', 'ruta-cuad'].forEach(function (id) { $(id).value = ''; });
+        vistaRuta();
+        $('dlg-ruta').showModal();
+    }
+    function vistaRuta() {
+        var p = parsearMensaje($('ruta-texto').value), cuad = $('ruta-cuad').value.trim().replace(/^C/i, '');
+        $('ruta-vista').innerHTML = p.lotes.length ? '<div class="sub">' + p.lotes.length + ' lote' + (p.lotes.length === 1 ? '' : 's') + ' encontrado' + (p.lotes.length === 1 ? '' : 's') + ':</div>' +
+            p.lotes.map(function (id) {
+                var x = infoLote(id), aviso = !x.mr ? 'no está en la programación' : cuad && x.cuad && x.cuad !== cuad ? 'es de la cuadrilla ' + x.cuad : '';
+                return '<span class="chip-ruta' + (aviso ? ' aviso' : '') + '">' + esc(x.lote || x.mr) + (x.lote && x.mr ? ' · ' + esc(x.mr) : '') + (aviso ? ' ⚠ ' + esc(aviso) : '') + '</span>';
+            }).join('') : '<div class="sub">Se toman del mensaje la fecha, la cuadrilla y los números de lote (o códigos de microrruta).</div>';
+        $('ruta-crear').disabled = !p.lotes.length;
+    }
+    $('ruta-texto').addEventListener('input', function () {
+        var p = parsearMensaje(this.value);
+        if (p.fecha) $('ruta-fecha').value = p.fecha;
+        if (p.cuad) $('ruta-cuad').value = p.cuad;
+        vistaRuta();
+    });
+    $('ruta-cuad').addEventListener('input', vistaRuta);
+    $('ruta-pegar').onclick = function () {
+        if (!navigator.clipboard || !navigator.clipboard.readText) { $('ruta-texto').focus(); return toast('Mantenga presionado el cuadro y elija Pegar.'); }
+        navigator.clipboard.readText().then(function (t) {
+            $('ruta-texto').value = t;
+            $('ruta-texto').dispatchEvent(new Event('input'));
+        }, function () { $('ruta-texto').focus(); toast('Mantenga presionado el cuadro y elija Pegar.'); });
+    };
+    $('ruta-cancelar').onclick = function () { $('dlg-ruta').close(); };
+    $('ruta-crear').onclick = function () {
+        var p = parsearMensaje($('ruta-texto').value);
+        if (!p.lotes.length) return;
+        rutas.unshift({ fecha: $('ruta-fecha').value, cuad: $('ruta-cuad').value.trim().replace(/^C/i, ''), lotes: p.lotes, creada: hoy() });
+        guardarRutas();
+        $('dlg-ruta').close();
+        pintarRutas();
+        toast('Pre-ruta creada con ' + p.lotes.length + ' lote' + (p.lotes.length === 1 ? '' : 's') + '. Use "Ordenar por cercanía" para empezar.');
+        $('ruta').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    pintarRutas();
 
     // ---------- Eventos generales ----------
     $('btn-nuevo').onclick = function () { abrir(null); };
