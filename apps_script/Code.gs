@@ -7,6 +7,8 @@
  *   - Subsanaciones: una visita por fila, con las mismas columnas del Excel de interventoría
  *     (cada ítem SI / NO / N/A) y al final las columnas de seguimiento de la subsanación.
  *   - Items: ítems a revisar. Columna A = nombre, columna B = Activo (SI/NO).
+ *   - Rutas: pre-rutas (lotes que mandan a revisar), una fila por lote. Se pueden escribir a mano:
+ *     con CUADRILLA, LOTE y FECHA DE EJECUCIÓN basta; la página las ordena por cercanía al abrirse.
  *
  * Se pueden pegar registros del Excel directamente desde la fila 2 de "Subsanaciones":
  * al abrir la página se les asigna ID y ESTADO.
@@ -28,6 +30,8 @@ var ITEMS_INICIALES = ['LIMPIEZA PREVIA', 'AFECTACIÓN A ÁRBOLES', 'LIMPIEZA MA
 var COLUMNAS_FIN = ['OBSERVACIONES NOVEDADES', 'ESTADO', 'FECHA SUBSANACIÓN', 'OBSERVACIÓN SUBSANACIÓN', 'EVIDENCIA',
   'ID', 'REGISTRADO POR', 'ÚLTIMA MODIFICACIÓN'];
 var NO_EDITABLES = ['ID', 'ESTADO', 'ÚLTIMA MODIFICACIÓN'];
+var HOJA_RUTAS = 'Rutas';
+var COLUMNAS_RUTAS = ['CUADRILLA', 'LOTE', 'FECHA DE EJECUCIÓN', 'ORDEN', 'CARGADA'];
 
 function doGet(e) {
   return responder(function () {
@@ -36,11 +40,12 @@ function doGet(e) {
     lock.waitLock(20000);
     try {
       completarPegados();
+      completarRutas();
     } finally {
       lock.releaseLock();
     }
     var hoja = hojaDatos();
-    return { items: leerItems(), columnas: encabezados(hoja), registros: listarRegistros(hoja) };
+    return { items: leerItems(), columnas: encabezados(hoja), registros: listarRegistros(hoja), rutas: listarRutas() };
   });
 }
 
@@ -54,6 +59,7 @@ function doPost(e) {
       if (cuerpo.accion === 'crear') return { registro: guardarRegistro(null, cuerpo.registro || {}) };
       if (cuerpo.accion === 'actualizar') return { registro: guardarRegistro(cuerpo.id, cuerpo.registro || {}) };
       if (cuerpo.accion === 'eliminar') { eliminarRegistro(cuerpo.id); return { eliminado: cuerpo.id }; }
+      if (cuerpo.accion === 'guardar_ruta') { guardarRuta(cuerpo.cuadrilla, cuerpo.paradas || []); return { rutas: listarRutas() }; }
       throw new Error('Acción no válida: ' + cuerpo.accion);
     } finally {
       lock.releaseLock();
@@ -240,8 +246,66 @@ function eliminarRegistro(id) {
   hoja.deleteRow(fila);
 }
 
+// ---------- Pre-rutas ----------
+function hojaRutas() {
+  var hoja = libro().getSheetByName(HOJA_RUTAS);
+  if (!hoja) {
+    hoja = libro().insertSheet(HOJA_RUTAS);
+    pintarEncabezado(hoja.getRange(1, 1, 1, COLUMNAS_RUTAS.length).setValues([COLUMNAS_RUTAS]));
+    hoja.setFrozenRows(1);
+    hoja.getRange(1, 1, hoja.getMaxRows(), COLUMNAS_RUTAS.length).setNumberFormat('@');
+  }
+  asegurarColumnas(hoja, encabezados(hoja), COLUMNAS_RUTAS);
+  return hoja;
+}
+
+function cuadrillaRuta(v) { return String(v == null ? '' : v).trim().replace(/^C\s*/i, ''); }
+
+function filasRutas(hoja, cab) {
+  return hoja.getLastRow() < 2 ? [] : hoja.getRange(2, 1, hoja.getLastRow() - 1, cab.length).getDisplayValues();
+}
+
+// Lotes escritos a mano: les pone la fecha de carga (sirve para saber si ya se revisaron)
+function completarRutas() {
+  var hoja = hojaRutas(), cab = encabezados(hoja);
+  var iLote = columna(cab, 'LOTE'), iCargada = columna(cab, 'CARGADA'), hoy = ahora().slice(0, 10);
+  filasRutas(hoja, cab).forEach(function (f, k) {
+    if (String(f[iLote]).trim() !== '' && f[iCargada] === '') hoja.getRange(k + 2, iCargada + 1).setNumberFormat('@').setValue(hoy);
+  });
+}
+
+function listarRutas() {
+  var hoja = hojaRutas(), cab = encabezados(hoja);
+  var i = {}; COLUMNAS_RUTAS.forEach(function (c) { i[c] = columna(cab, c); });
+  return filasRutas(hoja, cab).filter(function (f) { return String(f[i.LOTE]).trim() !== ''; }).map(function (f) {
+    return { cuadrilla: cuadrillaRuta(f[i.CUADRILLA]), lote: String(f[i.LOTE]).trim().toUpperCase(),
+             fecha: f[i['FECHA DE EJECUCIÓN']], orden: f[i.ORDEN], cargada: f[i.CARGADA] };
+  });
+}
+
+// Reemplaza todos los lotes de una cuadrilla por la lista recibida (vacía = quitar la cuadrilla)
+function guardarRuta(cuadrilla, paradas) {
+  var hoja = hojaRutas(), cab = encabezados(hoja), cuad = cuadrillaRuta(cuadrilla);
+  var iCuad = columna(cab, 'CUADRILLA');
+  var actuales = filasRutas(hoja, cab);
+  var quedan = actuales.filter(function (f) { return cuadrillaRuta(f[iCuad]) !== cuad; });
+  var nuevas = paradas.map(function (p, n) {
+    var f = cab.map(function () { return ''; });
+    f[iCuad] = cuad;
+    f[columna(cab, 'LOTE')] = String(p.lote || '');
+    f[columna(cab, 'FECHA DE EJECUCIÓN')] = String(p.fecha || '');
+    f[columna(cab, 'ORDEN')] = String(n + 1);
+    f[columna(cab, 'CARGADA')] = String(p.cargada || ahora().slice(0, 10));
+    return f;
+  });
+  var todas = quedan.concat(nuevas);
+  if (actuales.length) hoja.getRange(2, 1, actuales.length, cab.length).clearContent();
+  if (todas.length) hoja.getRange(2, 1, todas.length, cab.length).setNumberFormat('@').setValues(todas);
+}
+
 // Ejecute esta función una vez desde el editor para crear las hojas y autorizar el script.
 function configurar() {
   hojaDatos();
+  hojaRutas();
   Logger.log('Listo. Ítems activos: ' + leerItems().join(', '));
 }

@@ -301,6 +301,15 @@ botonSubsanaciones.onAdd = function(){
     return div;
 };
 botonSubsanaciones.addTo(map);
+
+var botonMapaRapido = L.control({position:'topleft'});
+botonMapaRapido.onAdd = function(){
+    var div = L.DomUtil.create('div', 'leaflet-bar search-control');
+    div.innerHTML = '<a href="mapa_rapido.html" title="Mapa rápido: carga solo la cuadrilla que necesite">&#9889;</a>';
+    L.DomEvent.disableClickPropagation(div);
+    return div;
+};
+botonMapaRapido.addTo(map);
 		
         var measureControl = new L.Control.Measure({
             position: 'topleft',
