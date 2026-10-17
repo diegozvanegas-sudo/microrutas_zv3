@@ -69,14 +69,72 @@
     .opciones input:focus-visible + label { outline: 2px solid var(--brand); outline-offset: -2px; }
     .pie { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
     .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; z-index: 50; display: none; max-width: calc(100% - 32px); }
+    fieldset { min-width: 0; }
+    .acciones-top { display: contents; }
+    #dlg-wa { width: min(480px, calc(100% - 24px)); height: auto; margin: auto; border-radius: 14px; }
+    #dlg-wa .cuerpo { padding: 18px; }
+    #wa-texto { display: block; width: 100%; min-height: 190px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: inherit; font-size: 15px; color: var(--ink); resize: vertical; }
+    .wa { color: #fff; background: #1f9d55; }
+    .detalle .wa-btn { width: 100%; padding: 11px; margin-top: 8px; }
+    /* Lista compacta para celular: solo lo importante y "Ver detalles" despliega el resto */
+    .movil { display: none; }
+    .visita { border-bottom: 1px solid var(--line); }
+    .visita:last-child { border-bottom: 0; }
+    .visita summary { list-style: none; cursor: pointer; padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; }
+    .visita summary::-webkit-details-marker { display: none; }
+    .visita .mr { font-weight: 700; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .visita .linea { grid-column: 1; font-size: 13px; color: var(--muted); }
+    .visita .linea .alerta { color: var(--pend); font-weight: 650; }
+    .visita .ver { grid-column: 2; justify-self: end; font-size: 13px; font-weight: 650; color: var(--brand); white-space: nowrap; }
+    .visita .ver::after { content: " ▾"; }
+    .visita[open] .ver::after { content: " ▴"; }
+    .visita .ver .menos, .visita[open] .ver .mas { display: none; }
+    .visita[open] .ver .menos { display: inline; }
+    .visita[open] summary { background: #f8fafb; }
+    .detalle { padding: 4px 14px 14px; background: #f8fafb; }
+    .detalle dl { margin: 0 0 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+    .detalle dl div.ancho { grid-column: 1 / -1; }
+    .detalle dt { font-size: 11px; color: var(--muted); font-weight: 650; text-transform: uppercase; }
+    .detalle dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+    .detalle .editar { width: 100%; padding: 11px; }
+    tr.fila-detalle td { padding: 0; }
+    tr.fila-detalle .detalle { padding: 14px 16px; border-left: 3px solid var(--brand); }
+    tr.fila-detalle .detalle dl { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
+    tr:has(+ tr.fila-detalle:not([hidden])) td { border-bottom: 0; background: #f8fafb; }
     @media (max-width: 760px) {
-        .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        thead { display: none; }
-        table, tbody, tr, td { display: block; width: 100%; }
-        tr { border-bottom: 1px solid var(--line); padding: 8px 0; }
-        td { border: 0; padding: 4px 14px; }
-        td::before { content: attr(data-label); display: block; font-size: 11px; color: var(--muted); font-weight: 650; }
-        .item { flex-direction: column; align-items: flex-start; }
+        body { font-size: 15px; }
+        header { padding: 12px 16px; gap: 8px; }
+        header h1 { font-size: 18px; min-width: 0; }
+        header .acciones-top { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 100%; }
+        header .acciones-top > * { padding: 8px 4px; font-size: 13px; text-align: center; }
+        header .acciones-top > [hidden] { display: none; }
+        main { padding: 12px 16px 90px; }
+        .resumen { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
+        .tarjeta { padding: 8px 6px; text-align: center; }
+        .tarjeta .num { font-size: 20px; }
+        .tarjeta .tit { font-size: 11px; line-height: 1.2; }
+        .filtros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+        .filtros input { grid-column: 1 / -1; min-width: 0; }
+        .filtros select { min-width: 0; font-size: 13px; }
+        .escritorio { display: none; }
+        .movil { display: block; }
+        /* "+ Nueva visita" flotante, siempre a mano con el pulgar */
+        #btn-nuevo { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 20; padding: 14px 20px; border-radius: 999px; box-shadow: 0 6px 18px rgba(15, 80, 55, .35); }
+        .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
+
+        /* Formulario a pantalla completa */
+        dialog { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; overflow-y: auto; }
+        dialog form { padding: 16px 16px 0; }
+        .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        /* 16px evita que iOS haga zoom al tocar un campo */
+        label input, label select, label textarea, .filtros input, .filtros select { font-size: 16px; }
+        input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; text-align: left; }
+        input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+        legend { white-space: normal; }
+        .item span:first-child { min-width: 0; }
+        .opciones label { padding: 9px 14px; }
+        .pie { position: sticky; bottom: 0; margin: 16px -16px 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid var(--line); }
+        .pie button { padding: 11px 16px; }
     }
     </style>
 </head>
@@ -84,9 +142,11 @@
 <header>
     <h1>Subsanaciones de lotes</h1>
     <a class="volver" href="index.html">← Volver al mapa</a>
-    <a class="boton secundario" id="abrir-hoja" target="_blank" hidden>Abrir hoja en Drive</a>
-    <button type="button" class="secundario" id="btn-excel">Descargar Excel</button>
-    <button type="button" class="secundario" id="btn-recargar">Actualizar</button>
+    <div class="acciones-top">
+        <a class="boton secundario" id="abrir-hoja" target="_blank" hidden>Abrir hoja en Drive</a>
+        <button type="button" class="secundario" id="btn-excel">Descargar Excel</button>
+        <button type="button" class="secundario" id="btn-recargar">Actualizar</button>
+    </div>
     <button type="button" class="primario" id="btn-nuevo">+ Nueva visita</button>
 </header>
 <main>
@@ -140,6 +200,18 @@
         </div>
     </form>
 </dialog>
+<dialog id="dlg-wa">
+    <div class="cuerpo">
+        <h2>Resumen para WhatsApp</h2>
+        <textarea id="wa-texto" aria-label="Texto del resumen"></textarea>
+        <div class="sub" style="margin-top:6px">Puede ajustar el texto antes de copiarlo.</div>
+        <div class="pie">
+            <button type="button" class="secundario" id="wa-cerrar">Cerrar</button>
+            <a class="boton secundario" id="wa-abrir" target="_blank" rel="noopener">Abrir WhatsApp</a>
+            <button type="button" class="wa" id="wa-copiar">Copiar</button>
+        </div>
+    </div>
+</dialog>
 <datalist id="lista-mr"></datalist>
 <div class="toast" id="toast"></div>
 
@@ -152,7 +224,7 @@
     var FIJAS = ['MICRORRUTA', 'LOTE', 'ÁREA M2', 'ZONA', 'CUADRILLA', 'FECHA DE EJECUCIÓN', 'FECHA DE LA VISITA', 'INTERVENTOR',
         'OBSERVACIONES NOVEDADES', 'ESTADO', 'FECHA SUBSANACIÓN', 'OBSERVACIÓN SUBSANACIÓN', 'EVIDENCIA', 'ID', 'REGISTRADO POR', 'ÚLTIMA MODIFICACIÓN'];
     var FECHAS = ['FECHA DE EJECUCIÓN', 'FECHA DE LA VISITA', 'FECHA SUBSANACIÓN'];
-    var items = [], columnas = [], registros = [], editando = null;
+    var items = [], columnas = [], registros = [], editando = null, abiertos = {};
     var $ = function (id) { return document.getElementById(id); };
     var dlg = $('dlg'), form = $('form');
 
@@ -273,7 +345,8 @@
             $('tabla').innerHTML = '<div class="vacio">' + (registros.length ? 'Ningún registro coincide con los filtros.' : 'Aún no hay visitas. Use "+ Nueva visita" o pegue su Excel en la hoja de Drive.') + '</div>';
             return;
         }
-        $('tabla').innerHTML = '<table><thead><tr><th>Microrruta / Lote</th><th>Visita</th><th>Ítems en NO</th><th>Estado</th><th>Observaciones</th><th></th></tr></thead><tbody>' +
+        $('tabla').innerHTML = '<div class="movil">' + lista.map(tarjetaMovil).join('') + '</div>' +
+            '<table class="escritorio"><thead><tr><th>Microrruta / Lote</th><th>Visita</th><th>Ítems en NO</th><th>Estado</th><th>Observaciones</th><th></th></tr></thead><tbody>' +
             lista.map(function (r) {
                 var enNo = itemsEnNo(r), d = r.ESTADO === 'PENDIENTE' ? dias(r['FECHA DE LA VISITA']) : null;
                 return '<tr>' +
@@ -287,10 +360,72 @@
                         (r.ESTADO === 'SUBSANADO' && r['FECHA SUBSANACIÓN'] ? '<div class="sub">' + esc(r['FECHA SUBSANACIÓN']) + '</div>' : '') + '</td>' +
                     '<td data-label="Observaciones">' + esc(r['OBSERVACIONES NOVEDADES'] || '') +
                         (r['OBSERVACIÓN SUBSANACIÓN'] ? '<div class="sub">Subsanación: ' + esc(r['OBSERVACIÓN SUBSANACIÓN']) + '</div>' : '') + '</td>' +
-                    '<td class="acciones"><button type="button" class="secundario pequeno" data-editar="' + esc(r.ID) + '">Editar</button></td>' +
-                    '</tr>';
+                    '<td class="acciones"><button type="button" class="secundario pequeno" data-ver="' + esc(r.ID) + '" aria-expanded="' + !!abiertos[r.ID] + '">' +
+                        (abiertos[r.ID] ? 'Ocultar ▴' : 'Ver detalles ▾') + '</button> ' +
+                        '<button type="button" class="secundario pequeno" data-editar="' + esc(r.ID) + '">Editar</button></td>' +
+                    '</tr>' +
+                    '<tr class="fila-detalle"' + (abiertos[r.ID] ? '' : ' hidden') + '><td colspan="6">' + detalle(r, false) + '</td></tr>';
             }).join('') + '</tbody></table>';
     }
+
+    function tarjetaMovil(r) {
+        var enNo = itemsEnNo(r), d = r.ESTADO === 'PENDIENTE' ? dias(r['FECHA DE LA VISITA']) : null;
+        return '<details class="visita"' + (abiertos[r.ID] ? ' open' : '') + ' data-id="' + esc(r.ID) + '"><summary>' +
+            '<span class="mr">' + esc(r.MICRORRUTA || '—') + '</span>' + badge(r.ESTADO) +
+            '<span class="linea">Lote ' + esc(r.LOTE || '—') + ' · ' + esc(r['FECHA DE LA VISITA'] || '—') +
+                (enNo.length ? ' · <span class="alerta">' + enNo.length + ' en NO</span>' : '') +
+                (d != null ? ' · <span class="alerta">' + d + ' d</span>' : '') + '</span>' +
+            '<span class="ver"><span class="mas">Ver detalles</span><span class="menos">Ocultar</span></span>' +
+            '</summary>' + detalle(r, true) + '</details>';
+    }
+
+    // Ficha completa de la visita (la usan la lista del celular y la fila desplegable de la tabla)
+    function detalle(r, conEditar) {
+        var enNo = itemsEnNo(r), d = r.ESTADO === 'PENDIENTE' ? dias(r['FECHA DE LA VISITA']) : null;
+        var dato = function (tit, html, ancho) { return html ? '<div' + (ancho ? ' class="ancho"' : '') + '><dt>' + tit + '</dt><dd>' + html + '</dd></div>' : ''; };
+        return '<div class="detalle"><dl>' +
+            dato('Zona', esc(r.ZONA)) + dato('Cuadrilla', esc(r.CUADRILLA)) +
+            dato('Interventor', esc(r.INTERVENTOR)) + dato('Ejecución', esc(r['FECHA DE EJECUCIÓN'])) +
+            dato('Área m2', esc(r['ÁREA M2'])) +
+            dato('Días desde la visita', d != null ? d + ' día' + (d === 1 ? '' : 's') : '') +
+            dato('Ítems en NO', enNo.length ? enNo.map(function (i) { return '<span class="chip">' + esc(i) + '</span>'; }).join('') : 'Ninguno', true) +
+            dato('Observaciones', esc(r['OBSERVACIONES NOVEDADES']), true) +
+            dato('Fecha subsanación', esc(r['FECHA SUBSANACIÓN'])) + dato('Registrado por', esc(r['REGISTRADO POR'])) +
+            dato('Observación subsanación', esc(r['OBSERVACIÓN SUBSANACIÓN']), true) +
+            dato('Evidencia', /^https?:\/\//i.test(r.EVIDENCIA || '') ? '<a href="' + esc(r.EVIDENCIA) + '" target="_blank" rel="noopener">Abrir fotos</a>' : esc(r.EVIDENCIA), true) +
+            '</dl>' + (conEditar ? '<button type="button" class="primario editar" data-editar="' + esc(r.ID) + '">Editar</button>' : '') +
+            (enNo.length ? '<button type="button" class="wa' + (conEditar ? ' wa-btn' : ' pequeno') + '" data-wa="' + esc(r.ID) + '">Resumen WhatsApp</button>' : '') + '</div>';
+    }
+
+    // ---------- Resumen para WhatsApp ----------
+    function frase(s) { s = String(s || '').trim().toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); }
+    function textoWhatsapp(r) {
+        var h = new Date().getHours();
+        var saludo = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
+        var cuad = String(r.CUADRILLA || '').trim();
+        if (/^\d+$/.test(cuad)) cuad = 'C' + cuad;
+        var lineas = itemsEnNo(r).map(function (i) { return '- ' + frase(i).replace(/\.?$/, '.'); });
+        var obs = String(r['OBSERVACIONES NOVEDADES'] || '').trim();
+        if (obs && norm(obs) !== 'SIN NOVEDAD') lineas.push('- ' + frase(obs).replace(/\.?$/, '.'));
+        return saludo + '\n\n' +
+            'Novedad' + (cuad ? ' ' + cuad : '') + '\n\n' +
+            (r.MICRORRUTA || '') + (r.LOTE ? ' (' + r.LOTE + ')' : '') + '\n' +
+            lineas.join('\n');
+    }
+    function actualizarEnlaceWa() { $('wa-abrir').href = 'https://wa.me/?text=' + encodeURIComponent($('wa-texto').value); }
+    function mostrarWhatsapp(r) {
+        $('wa-texto').value = textoWhatsapp(r);
+        actualizarEnlaceWa();
+        $('dlg-wa').showModal();
+    }
+    $('wa-texto').addEventListener('input', actualizarEnlaceWa);
+    $('wa-cerrar').onclick = function () { $('dlg-wa').close(); };
+    $('wa-copiar').onclick = function () {
+        var t = $('wa-texto');
+        var copiado = function () { toast('Resumen copiado. Péguelo en WhatsApp.'); };
+        var aMano = function () { t.select(); try { document.execCommand('copy'); copiado(); } catch (e) { toast('Seleccione el texto y cópielo manualmente.'); } };
+        if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(t.value).then(copiado, aMano); else aMano();
+    };
 
     // ---------- Formulario ----------
     function campos() { return form.querySelectorAll('[data-campo]'); }
@@ -366,6 +501,7 @@
             llenarSelect('f-cuadrilla', 'CUADRILLA', 'Todas las cuadrillas');
             pintar();
             toast((era ? 'Actualizado ' : 'Guardado ') + nuevo.ID + ' · ' + nuevo.ESTADO);
+            if (!era && itemsEnNo(nuevo).length) mostrarWhatsapp(nuevo);
         }).catch(function (err) { toast('No se guardó: ' + err.message); })
           .then(function () { ocupado(false); });
     });
@@ -437,8 +573,21 @@
     };
     $('tabla').onclick = function (ev) {
         var b = ev.target.closest('[data-editar]');
-        if (b) abrir(registros.find(function (r) { return r.ID === b.dataset.editar; }));
+        if (b) return abrir(registros.find(function (r) { return r.ID === b.dataset.editar; }));
+        var w = ev.target.closest('[data-wa]');
+        if (w) return mostrarWhatsapp(registros.find(function (r) { return r.ID === w.dataset.wa; }));
+        var v = ev.target.closest('[data-ver]');
+        if (v) {
+            var abierto = abiertos[v.dataset.ver] = !abiertos[v.dataset.ver];
+            v.closest('tr').nextElementSibling.hidden = !abierto;
+            v.textContent = abierto ? 'Ocultar ▴' : 'Ver detalles ▾';
+            v.setAttribute('aria-expanded', abierto);
+        }
     };
+    // Recuerda qué fichas del celular quedaron abiertas al filtrar o guardar
+    $('tabla').addEventListener('toggle', function (ev) {
+        if (ev.target.dataset && ev.target.dataset.id) abiertos[ev.target.dataset.id] = ev.target.open;
+    }, true);
     if (CFG.hoja) { $('abrir-hoja').href = CFG.hoja; $('abrir-hoja').hidden = false; }
 
     // Excel con las mismas columnas de la hoja y lo que esté filtrado (SheetJS se carga solo al pedirlo)
