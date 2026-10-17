@@ -121,6 +121,8 @@
     #dlg-ruta .cuerpo { padding: 18px; }
     #ruta-texto { min-height: 140px; }
     .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    .contexto { margin: -4px 0 14px; padding: 10px 12px; border-radius: 10px; background: #edf8f3; border-left: 4px solid var(--brand); font-size: 13px; line-height: 1.45; }
+    .contexto b { font-size: 15px; }
     .ir-mapa { margin-bottom: 12px; }
     .ir-mapa input { width: 100%; min-height: 42px; border: 1px solid #b8c6cd; border-radius: 10px; padding: 8px 12px 8px 36px; font: inherit; color: var(--ink);
                      background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%23167a55' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.5'/%3E%3C/svg%3E") no-repeat 11px center; }
@@ -228,6 +230,7 @@
 <dialog id="dlg">
     <form id="form" method="dialog" autocomplete="off">
         <h2><span id="dlg-titulo">Nueva visita</span> <span class="estado" id="dlg-estado"></span></h2>
+        <div class="contexto" id="dlg-contexto" hidden></div>
         <div class="grid">
             <div class="doble buscador">
                 <label>MICRORRUTA <input data-campo="MICRORRUTA" data-buscar="mr" placeholder="Microrruta, lote o dirección" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
@@ -310,6 +313,7 @@
         'OBSERVACIONES NOVEDADES', 'ESTADO', 'FECHA SUBSANACIÓN', 'OBSERVACIÓN SUBSANACIÓN', 'EVIDENCIA', 'ID', 'REGISTRADO POR', 'ÚLTIMA MODIFICACIÓN'];
     var FECHAS = ['FECHA DE EJECUCIÓN', 'FECHA DE LA VISITA', 'FECHA SUBSANACIÓN'];
     var items = [], columnas = [], registros = [], editando = null, abiertos = {};
+    var cargado = false, alCargar = null, desdeRuta = null;
     var $ = function (id) { return document.getElementById(id); };
     var dlg = $('dlg'), form = $('form');
 
@@ -390,8 +394,10 @@
             llenarSelect('f-zona', 'ZONA', 'Todas las zonas');
             llenarSelect('f-cuadrilla', 'CUADRILLA', 'Todas las cuadrillas');
             if (d.rutas) rutasDeHoja(d.rutas);
+            cargado = true;
             pintar();
             abrirDesdeUrl();
+            if (alCargar) { var f = alCargar; alCargar = null; f(); }
         }).catch(function (err) {
             aviso('<b>No se pudo leer la hoja:</b> ' + esc(err.message) + '. Revise que la aplicación web esté publicada con acceso "Cualquier usuario".', true);
             $('tabla').innerHTML = '<div class="vacio">No hay datos.</div>';
@@ -546,7 +552,10 @@
         $('dlg-direccion').innerHTML = p ? (p.d ? 'Dirección: ' + esc(p.d) + ' · ' : '') +
             '<a class="enlace-mapa" target="_blank" rel="noopener" href="' + esc(urlMapa(mr, p.lote)) + '">Ver en mapa ›</a>' : '';
     }
-    function abrir(r) {
+    function abrir(r, contexto) {
+        desdeRuta = contexto || null;
+        $('dlg-contexto').innerHTML = contexto ? contexto.html : '';
+        $('dlg-contexto').hidden = !contexto;
         editando = r && r.ID ? r : null;
         r = r || {};
         $('dlg-titulo').textContent = editando ? 'Editar ' + editando.ID : 'Nueva visita';
@@ -567,6 +576,8 @@
         actualizarLimpiar();
         actualizarEstadoForm();
         dlg.showModal();
+        dlg.scrollTop = 0; // el celular recuerda dónde quedó la ventana anterior
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     }
     function ocupado(si) { ['btn-guardar', 'btn-eliminar', 'btn-cancelar'].forEach(function (id) { $(id).disabled = si; }); }
 
@@ -581,7 +592,7 @@
             localStorage.setItem('subsanaciones_interventor', r.INTERVENTOR);
         } catch (e) {}
         ocupado(true);
-        var era = editando;
+        var era = editando, veniaDeRuta = desdeRuta;
         var peticion = era ? enviar('actualizar', { id: era.ID, registro: r }) : enviar('crear', { registro: r });
         peticion.then(function (d) {
             var nuevo = canonico(d.registro);
@@ -592,6 +603,11 @@
             llenarSelect('f-cuadrilla', 'CUADRILLA', 'Todas las cuadrillas');
             pintar();
             toast((era ? 'Actualizado ' : 'Guardado ') + nuevo.ID + ' · ' + nuevo.ESTADO);
+            if (veniaDeRuta && !era) {
+                var sig = $('ruta').querySelectorAll('.ruta-card')[veniaDeRuta.ri];
+                sig = sig && (sig.querySelector('.parada.siguiente') || sig);
+                if (sig) setTimeout(function () { sig.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300);
+            }
             if (!era && itemsEnNo(nuevo).length) mostrarWhatsapp(nuevo);
         }).catch(function (err) { toast('No se guardó: ' + err.message); })
           .then(function () { ocupado(false); });
@@ -933,9 +949,22 @@
             rutas.splice(+b.dataset.ri, 1); guardarRutas(); subirRuta({ cuad: ruta.cuad, paradas: [] }); return pintarRutas();
         }
         if (accion === 'registrar') {
-            var x = infoLote(b.dataset.id), parada = ruta.paradas.find(function (p) { return p.id === b.dataset.id; }) || {};
-            abrir({ MICRORRUTA: x.mr, LOTE: x.lote, CUADRILLA: ruta.cuad, 'FECHA DE EJECUCIÓN': aTexto(parada.fecha || '') });
-            if (x.mr) completar(x.mr);
+            var ri = +b.dataset.ri, x = infoLote(b.dataset.id);
+            var n = ruta.paradas.findIndex(function (p) { return p.id === b.dataset.id; }), parada = ruta.paradas[n] || {};
+            var registrar = function () {
+                abrir({ MICRORRUTA: x.mr, LOTE: x.lote, CUADRILLA: ruta.cuad, 'FECHA DE EJECUCIÓN': aTexto(parada.fecha || '') }, {
+                    ri: ri,
+                    html: '📍 Pre-ruta' + (ruta.cuad ? ' cuadrilla ' + esc(ruta.cuad) : '') + ' · parada ' + (n + 1) + ' de ' + ruta.paradas.length + '<br>' +
+                        '<b>' + esc(x.lote ? 'Lote ' + x.lote : x.mr) + '</b>' + (x.lote && x.mr ? ' · ' + esc(x.mr) : '') +
+                        (parada.fecha ? ' · ejecutado ' + esc(aTexto(parada.fecha)) : '') + (x.d ? '<br>' + esc(x.d) : '')
+                });
+                if (x.mr) completar(x.mr);
+                // completar() pone la cuadrilla de la programación; se respeta la del mensaje si vino
+                if (ruta.cuad) form.querySelector('[data-campo="CUADRILLA"]').value = ruta.cuad;
+            };
+            if (cargado || !CFG.url) return registrar();
+            alCargar = registrar;
+            toast('Cargando la hoja… el formulario se abre en un momento.');
             return;
         }
         if (accion === 'ordenar') {
