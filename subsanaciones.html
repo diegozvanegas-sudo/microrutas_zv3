@@ -153,6 +153,7 @@
     .visita:last-child { border-bottom: 0; }
     .visita summary { list-style: none; cursor: pointer; padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; }
     .visita summary::-webkit-details-marker { display: none; }
+    .lote-tit { display: block; font-size: 18px; font-weight: 800; white-space: nowrap; }
     .visita .mr { font-weight: 800; font-size: 19px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .visita .mr .cod { font-weight: 500; font-size: 13px; color: var(--muted); margin-left: 6px; }
     .visita .linea { grid-column: 1; font-size: 13px; color: var(--muted); }
@@ -499,12 +500,12 @@
             return;
         }
         $('tabla').innerHTML = '<div class="movil">' + lista.map(tarjetaMovil).join('') + '</div>' +
-            '<table class="escritorio"><thead><tr><th>Microrruta / Lote</th><th>Visita</th><th>Ítems en NO</th><th>Estado</th><th>Observaciones</th><th></th></tr></thead><tbody>' +
+            '<table class="escritorio"><thead><tr><th>Lote / Microrruta</th><th>Visita</th><th>Ítems en NO</th><th>Estado</th><th>Observaciones</th><th></th></tr></thead><tbody>' +
             lista.map(function (r) {
                 var enNo = itemsEnNo(r), d = r.ESTADO === 'PENDIENTE' ? dias(r['FECHA DE LA VISITA']) : null;
                 return '<tr>' +
-                    '<td data-label="Microrruta / Lote"><b>' + esc(r.MICRORRUTA || '—') + '</b><div class="sub">Lote ' + esc(r.LOTE || '—') +
-                        (r.ZONA ? ' · Zona ' + esc(r.ZONA) : '') + (r.CUADRILLA ? ' · Cuadrilla ' + esc(r.CUADRILLA) : '') + '</div></td>' +
+                    '<td data-label="Lote / Microrruta"><span class="lote-tit">' + (r.LOTE ? 'Lote ' + esc(r.LOTE) : esc(r.MICRORRUTA || '—')) + '</span>' +
+                        '<div class="sub">' + [r.LOTE ? r.MICRORRUTA : '', r.ZONA ? 'Zona ' + r.ZONA : '', r.CUADRILLA ? 'Cuadrilla ' + r.CUADRILLA : ''].filter(Boolean).map(esc).join(' · ') + '</div></td>' +
                     '<td data-label="Visita">' + esc(r['FECHA DE LA VISITA'] || '—') + '<div class="sub">' + esc(r.INTERVENTOR || '') +
                         (r['FECHA DE EJECUCIÓN'] ? ' · Ejecución ' + esc(r['FECHA DE EJECUCIÓN']) : '') + '</div></td>' +
                     '<td data-label="Ítems en NO">' + (enNo.length ? enNo.map(function (i) { return '<span class="chip">' + esc(i) + '</span>'; }).join('') : '<span class="sub">Ninguno</span>') + '</td>' +
