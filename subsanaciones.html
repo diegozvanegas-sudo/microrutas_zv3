@@ -10,9 +10,16 @@
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
     body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: var(--ink); background: var(--bg); font-size: 14px; }
-    header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
-    header h1 { margin: 0; font-size: 19px; flex: 1; min-width: 200px; }
-    header a.volver { color: var(--brand); text-decoration: none; font-weight: 600; }
+    header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 12px max(16px, calc((100% - 1320px) / 2 + 16px)); background: var(--surface); border-bottom: 1px solid var(--line); }
+    header .marca { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+    header .logo { flex: none; width: 40px; height: 40px; border-radius: 11px; background: #e3f4ec; display: grid; place-items: center; font-size: 21px; }
+    header .nombre { min-width: 0; }
+    header h1 { margin: 0; font-size: 21px; line-height: 1.15; font-weight: 800; letter-spacing: -.01em; }
+    header .lema { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nav-mapas { display: flex; gap: 6px; }
+    .nav-mapas a { color: var(--brand); text-decoration: none; font-weight: 650; padding: 7px 11px; border: 1px solid var(--line); border-radius: 9px; white-space: nowrap; background: #fff; }
+    .nav-mapas a:hover { background: #edf8f3; }
+    .corto { display: none; }
     main { max-width: 1320px; margin: 0 auto; padding: 16px; }
     button, .boton { font: inherit; border-radius: 8px; border: 0; padding: 8px 14px; cursor: pointer; font-weight: 600; text-decoration: none; display: inline-block; }
     .primario { color: #fff; background: var(--brand); }
@@ -170,10 +177,14 @@
     tr:has(+ tr.fila-detalle:not([hidden])) td { border-bottom: 0; background: #f8fafb; }
     @media (max-width: 760px) {
         body { font-size: 15px; }
-        header { padding: 12px 16px; gap: 8px; }
-        header h1 { font-size: 18px; min-width: 0; }
-        header .acciones-top { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 100%; }
-        header .acciones-top > * { padding: 8px 4px; font-size: 13px; text-align: center; }
+        header { padding: 10px 16px; gap: 8px; }
+        header .logo { width: 36px; height: 36px; font-size: 19px; border-radius: 10px; }
+        header h1 { font-size: 19px; }
+        .largo { display: none; }
+        .corto { display: inline; }
+        .nav-mapas a { padding: 7px 9px; font-size: 13px; }
+        header .acciones-top { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 6px; width: 100%; }
+        header .acciones-top > * { padding: 7px 4px; font-size: 13px; text-align: center; white-space: nowrap; }
         header .acciones-top > [hidden] { display: none; }
         main { padding: 12px 16px 90px; }
         .resumen { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
@@ -198,8 +209,10 @@
         label input, label select, label textarea { border-color: #b8c6cd; min-height: 44px; }
         .sugerencias button { padding: 12px 14px; }
         .parada { grid-template-columns: 30px minmax(0, 1fr); }
-        .parada .btns { grid-column: 2; justify-content: flex-start; }
-        .parada .btns > *, .ruta-acciones > * { padding: 9px 12px; font-size: 13px; }
+        /* Botones de la parada a todo el ancho de la tarjeta, en una sola fila */
+        .parada .btns { grid-column: 1 / -1; justify-content: flex-start; gap: 5px; }
+        .parada .btns > * { padding: 9px 10px; font-size: 13px; }
+        .ruta-acciones > * { padding: 9px 12px; font-size: 13px; }
         input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; text-align: left; }
         input[type="date"]::-webkit-date-and-time-value { text-align: left; }
         legend { white-space: normal; }
@@ -208,17 +221,31 @@
         .pie { position: sticky; bottom: 0; margin: 16px -16px 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid var(--line); }
         .pie button { padding: 11px 16px; }
     }
+    /* Celulares angostos: sin el ícono para que el nombre no se corte */
+    @media (max-width: 400px) {
+        header .logo { display: none; }
+        header h1 { font-size: 18px; }
+        .nav-mapas { gap: 5px; }
+        .nav-mapas a { padding: 7px 8px; }
+        .parada .btns { flex-wrap: nowrap; gap: 4px; }
+        .parada .btns > * { flex: 1 1 auto; padding: 9px 5px; font-size: 12px; text-align: center; white-space: nowrap; }
+    }
     </style>
 </head>
 <body>
 <header>
-    <h1>Subsanaciones de lotes</h1>
-    <a class="volver" href="index.html">← Volver al mapa</a>
-    <a class="volver" href="mapa_rapido.html">⚡ Mapa rápido</a>
+    <div class="marca">
+        <span class="logo" aria-hidden="true">📋</span>
+        <div class="nombre"><h1>Subsanaciones</h1><div class="lema">Revisión de lotes · Zonas verdes</div></div>
+    </div>
+    <nav class="nav-mapas" aria-label="Mapas">
+        <a href="index.html" title="Mapa completo con todas las capas">🗺️ <span class="largo">Mapa completo</span><span class="corto">Mapa</span></a>
+        <a href="mapa_rapido.html" title="Mapa rápido">⚡ <span class="largo">Mapa rápido</span><span class="corto">Rápido</span></a>
+    </nav>
     <div class="acciones-top">
-        <a class="boton secundario" id="abrir-hoja" target="_blank" hidden>Abrir hoja en Drive</a>
-        <button type="button" class="secundario" id="btn-excel">Descargar Excel</button>
-        <button type="button" class="secundario" id="btn-recargar">Actualizar</button>
+        <a class="boton secundario" id="abrir-hoja" target="_blank" hidden>📄 <span class="largo">Abrir hoja en </span>Drive</a>
+        <button type="button" class="secundario" id="btn-excel">⬇ <span class="largo">Descargar </span>Excel</button>
+        <button type="button" class="secundario" id="btn-recargar">↻ Actualizar</button>
     </div>
     <button type="button" class="primario" id="btn-nuevo">+ Nueva visita</button>
 </header>
@@ -233,10 +260,10 @@
     <div class="filtros">
         <input type="search" id="f-texto" placeholder="Buscar por microrruta, lote, interventor, observaciones…">
         <select id="f-estado" aria-label="Estado">
-            <option value="">Todos los estados</option><option>PENDIENTE</option><option>SUBSANADO</option><option>SIN NOVEDAD</option>
+            <option value="">Estado: todos</option><option value="PENDIENTE">Pendiente</option><option value="SUBSANADO">Subsanado</option><option value="SIN NOVEDAD">Sin novedad</option>
         </select>
-        <select id="f-zona" aria-label="Zona"></select>
-        <select id="f-cuadrilla" aria-label="Cuadrilla"></select>
+        <select id="f-zona" aria-label="Zona"><option value="">Zona: todas</option></select>
+        <select id="f-cuadrilla" aria-label="Cuadrilla"><option value="">Cuadrilla: todas</option></select>
     </div>
     <div class="panel"><div id="tabla"><div class="cargando">Cargando…</div></div></div>
 </main>
@@ -422,8 +449,8 @@
             columnas = d.columnas || [];
             registros = (d.registros || []).map(canonico);
             ordenarRegistros();
-            llenarSelect('f-zona', 'ZONA', 'Todas las zonas');
-            llenarSelect('f-cuadrilla', 'CUADRILLA', 'Todas las cuadrillas');
+            llenarSelect('f-zona', 'ZONA', 'Zona: todas');
+            llenarSelect('f-cuadrilla', 'CUADRILLA', 'Cuadrilla: todas');
             if (d.rutas) rutasDeHoja(d.rutas);
             cargado = true;
             pintar();
@@ -439,7 +466,9 @@
         var sel = $(id), actual = sel.value;
         var valores = registros.map(function (r) { return String(r[campo] || '').trim(); }).filter(Boolean)
             .filter(function (z, i, a) { return a.indexOf(z) === i; }).sort(function (a, b) { return a.localeCompare(b, 'es', { numeric: true }); });
-        sel.innerHTML = '<option value="">' + todos + '</option>' + valores.map(function (z) { return '<option>' + esc(z) + '</option>'; }).join('');
+        // "Zona 2" / "Cuadrilla 4": en el celular el selector solo muestra el texto elegido
+        var pre = campo === 'ZONA' ? 'Zona ' : campo === 'CUADRILLA' ? 'Cuadrilla ' : '';
+        sel.innerHTML = '<option value="">' + todos + '</option>' + valores.map(function (z) { return '<option value="' + esc(z) + '">' + esc(/^\d+$/.test(z) ? pre + z : z) + '</option>'; }).join('');
         sel.value = actual;
     }
 
@@ -646,8 +675,8 @@
             if (i === -1) registros.unshift(nuevo); else registros[i] = nuevo;
             ordenarRegistros();
             dlg.close();
-            llenarSelect('f-zona', 'ZONA', 'Todas las zonas');
-            llenarSelect('f-cuadrilla', 'CUADRILLA', 'Todas las cuadrillas');
+            llenarSelect('f-zona', 'ZONA', 'Zona: todas');
+            llenarSelect('f-cuadrilla', 'CUADRILLA', 'Cuadrilla: todas');
             pintar();
             toast((era ? 'Actualizado ' : 'Guardado ') + nuevo.ID + ' · ' + nuevo.ESTADO);
             if (veniaDeRuta && !era) {
@@ -1019,7 +1048,7 @@
                 '<div class="ruta-cab">' +
                     '<button type="button" class="ruta-plegar" data-ruta="plegar" data-ri="' + ri + '" aria-expanded="' + !plegada + '" aria-label="Plegar o desplegar">▾</button>' +
                     '<div data-ruta="plegar" data-ri="' + ri + '"><b>' + (ruta.cuad ? 'Cuadrilla ' + esc(ruta.cuad) : 'Pre-ruta') + '</b>' +
-                    (fechas.length ? ' · ejecutados ' + esc(fechas.map(aTexto).join(', ')) : '') +
+                    (fechas.length ? ' <span class="sub">· ejec. ' + esc(fechas.map(function (f) { return aTexto(f).slice(0, 5); }).join(', ')) + '</span>' : '') +
                     '<div class="sub">' + (hechas === paradas.length ? '✓ Ruta completa · ' : '') + hechas + ' de ' + paradas.length + ' revisados</div></div>' +
                     '<button type="button" class="ruta-quitar" data-ruta="quitar" data-ri="' + ri + '" aria-label="Quitar pre-ruta">×</button></div>' +
                 '<div class="progreso"><span style="width:' + Math.round(100 * hechas / paradas.length) + '%"></span></div>' +
@@ -1049,7 +1078,7 @@
                             (x.mr || x.lote ? '<a class="boton secundario pequeno" href="' + esc(urlMapa(x.mr, x.lote)) + '">Mapa</a>' : '') +
                             (x.visita || pend.length < 2 ? '' : x.despues
                                 ? '<button type="button" class="secundario pequeno" data-ruta="ahora" data-ri="' + ri + '" data-id="' + esc(x.id) + '">Hacer ahora</button>'
-                                : '<button type="button" class="secundario pequeno" data-ruta="despues" data-ri="' + ri + '" data-id="' + esc(x.id) + '">Después ⤓</button>') +
+                                : '<button type="button" class="secundario pequeno" data-ruta="despues" data-ri="' + ri + '" data-id="' + esc(x.id) + '">⤓ Después</button>') +
                         '</div></li>';
                 }).join('') + '</ol></div>';
         }).join('') + '<button type="button" class="secundario pequeno otra" data-ruta="nueva">+ Otra pre-ruta</button>';

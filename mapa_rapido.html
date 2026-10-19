@@ -56,6 +56,11 @@
     .ficha-lote .acciones { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 4px; }
     .ficha-lote .acciones .boton { text-align: center; padding: 11px 12px; font-size: 15px; }
     .ficha-lote .acciones .subs { grid-column: 1 / -1; }
+    /* Leaflet pinta de azul todos los enlaces del mapa: se fuerzan los colores de los botones */
+    .ficha-lote .acciones a.primario { color: #fff; background: var(--brand); }
+    .ficha-lote .acciones a.primario:hover { color: #fff; background: var(--brand-dark); }
+    .ficha-lote .acciones a.secundario { color: var(--brand); background: #edf8f3; }
+    .ficha-lote .acciones a.secundario:hover { color: var(--brand-dark); background: #dcf1e7; }
     .leaflet-popup-content .ficha-lote { min-width: 250px; }
     #ficha { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1002; background: var(--surface); border-radius: 16px 16px 0 0;
              box-shadow: 0 -6px 24px rgba(0, 0, 0, .25); padding: 6px 16px calc(16px + env(safe-area-inset-bottom));
