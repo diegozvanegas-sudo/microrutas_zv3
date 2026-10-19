@@ -77,6 +77,8 @@ Visitas durante la operación (pestaña "Operación")
 - Se guarda en la pestaña "Operación" (IDs OPE-00001...) y sus ítems se cambian en la pestaña "Items Operación".
   Pendiente / subsanado funciona igual. No cuenta como revisión del lote: la parada de la pre-ruta sigue pendiente.
 - En la pre-ruta, los lotes con la cuadrilla trabajando (▶ azul) tienen el botón "🦺 Visita operación".
+- El formulario de operación muestra un recuadro "📌 Tener en cuenta" (informativo, no se guarda). Se edita en la
+  pestaña "Recordatorios Operación": columna A el texto, columna B SI/NO. Pulse "Actualizar" en la página después.
 - Requiere actualizar el Apps Script (pegar de nuevo apps_script/Code.gs y publicar nueva versión).
   Al abrir la página se crean solas las pestañas "Operación" e "Items Operación".
 

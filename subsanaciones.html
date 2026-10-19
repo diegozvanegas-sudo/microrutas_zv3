@@ -77,6 +77,18 @@
     .tipo-visita input:checked + label { border-color: var(--brand); background: #edf8f3; box-shadow: inset 0 0 0 1px var(--brand); }
     .tipo-visita #tipo-op:checked + label { border-color: #c2410c; background: #fff7ed; box-shadow: inset 0 0 0 1px #c2410c; }
     .tipo-visita input:focus-visible + label { outline: 2px solid var(--brand); outline-offset: 2px; }
+    /* "Tener en cuenta" de la visita durante la operación: informativo, no se guarda */
+    .recordatorios { margin: 0 0 14px; padding: 10px 12px 10px 14px; border-radius: 10px; background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #d97706; font-size: 13px; line-height: 1.45; color: #78350f; }
+    .recordatorios b { display: block; margin-bottom: 4px; font-size: 13px; color: #92400e; }
+    .recordatorios ul { margin: 0; padding-left: 18px; }
+    .recordatorios li + li { margin-top: 3px; }
+    #dlg-confirmar { width: min(420px, calc(100% - 32px)); height: auto; margin: auto; border-radius: 14px; }
+    #dlg-confirmar .cuerpo { padding: 18px; }
+    #dlg-confirmar h2 { margin: 0 0 8px; font-size: 17px; }
+    #dlg-confirmar p { margin: 0; line-height: 1.45; color: #475569; white-space: pre-line; }
+    #dlg-confirmar .pie { position: static; margin: 16px 0 0; padding: 0; border: 0; }
+    #dlg-confirmar .pie button { flex: 1; padding: 11px 14px; }
+    .peligro-fuerte { color: #fff; background: var(--pend); }
     .tag-op { display: inline-block; font-size: 11px; font-weight: 700; color: #9a3412; background: #ffedd5; padding: 1px 7px; border-radius: 99px; vertical-align: middle; }
     dialog form { padding: 18px; }
     dialog h2 { margin: 0 0 14px; font-size: 18px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -318,6 +330,7 @@
             <input type="radio" name="tipo-visita" id="tipo-op" value="OPERACIÓN"><label for="tipo-op">🦺 Durante la operación<small>PMT, valla, mallas, EPP…</small></label>
         </div>
         <div class="contexto" id="dlg-contexto" hidden></div>
+        <div class="recordatorios" id="dlg-recordatorios" hidden></div>
         <div class="grid">
             <div class="doble buscador">
                 <label>MICRORRUTA <input data-campo="MICRORRUTA" data-buscar="mr" placeholder="Microrruta, lote o dirección" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
@@ -355,7 +368,7 @@
             </fieldset>
         </div>
         <div class="pie">
-            <button type="button" class="peligro" id="btn-eliminar" hidden>Eliminar</button>
+            <button type="button" class="peligro" id="btn-eliminar" hidden>🗑 Eliminar</button>
             <span style="flex:1"></span>
             <button type="button" class="secundario" id="btn-cancelar">Cancelar</button>
             <button type="submit" class="primario" id="btn-guardar">Guardar</button>
@@ -397,6 +410,17 @@
         </div>
     </div>
 </dialog>
+<!-- Confirmación propia: el confirm() del navegador no aparece en algunos celulares (p. ej. al abrir desde WhatsApp) -->
+<dialog id="dlg-confirmar">
+    <div class="cuerpo">
+        <h2 id="conf-titulo"></h2>
+        <p id="conf-texto"></p>
+        <div class="pie">
+            <button type="button" class="secundario" id="conf-no">Cancelar</button>
+            <button type="button" class="peligro-fuerte" id="conf-si"></button>
+        </div>
+    </div>
+</dialog>
 <div class="toast" id="toast"></div>
 
 <script src="js/subsanaciones_config.js"></script>
@@ -416,6 +440,13 @@
     // Dos tipos de visita: al lote ya ejecutado (hoja "Subsanaciones", SUB-) y durante la operación (hoja "Operación", OPE-)
     var EJ = 'EJECUCIÓN', OP = 'OPERACIÓN';
     var itemsOp = [], columnasOp = [], hayOperacion = false, tipoForm = EJ;
+    // "Tener en cuenta" de la visita durante la operación. La hoja "Recordatorios Operación" los reemplaza al cargar.
+    var recordatorios = [
+        'Telas auxiliares, vallas y demás elementos de información del contrato: no deben figurar contratos viejos.',
+        'Validar el estado de los elementos del equipo operativo (herramientas, dotación, EPP).',
+        'Verificar que la cuadrilla delimite el área de trabajo y cuente con los elementos para hacerlo.',
+        'Las evidencias de las novedades subsanadas se deben remitir oportunamente, al momento de subsanar (evitar solicitudes reiteradas).'
+    ];
     function esOp(r) { return !!r && (r.TIPO === OP || /^OPE-/.test(r.ID || '')); }
     function itemsDe(r) { return esOp(r) ? itemsOp : items; }
     function itemsForm() { return tipoForm === OP ? itemsOp : items; }
@@ -558,6 +589,7 @@
         hayOperacion = !!d.itemsOperacion;
         itemsOp = d.itemsOperacion || [];
         columnasOp = d.columnasOperacion || [];
+        if (d.recordatorios) recordatorios = d.recordatorios;
         registros = (d.registros || []).map(canonico);
         ordenarRegistros();
         llenarSelect('f-zona', 'ZONA', 'Zona: todas');
@@ -578,7 +610,7 @@
     function guardarCache() {
         try {
             localStorage.setItem(CACHE, JSON.stringify({ t: Date.now(), items: items, columnas: columnas,
-                itemsOperacion: hayOperacion ? itemsOp : undefined, columnasOperacion: columnasOp,
+                itemsOperacion: hayOperacion ? itemsOp : undefined, columnasOperacion: columnasOp, recordatorios: recordatorios,
                 registros: registros, rutas: ultimasRutas || (leerCache() || {}).rutas || null }));
         } catch (e) {}
     }
@@ -677,12 +709,31 @@
             (conEditar ? '' : ' <button type="button" class="peligro pequeno" data-eliminar="' + esc(r.ID) + '" style="margin-top:8px">🗑 Eliminar</button>') + '</div>';
     }
 
+    // Ventana de confirmación de la página. Devuelve una promesa con true (aceptó) o false.
+    function confirmar(titulo, texto, boton) {
+        var d = $('dlg-confirmar');
+        $('conf-titulo').textContent = titulo;
+        $('conf-texto').textContent = texto || '';
+        $('conf-si').textContent = boton || 'Aceptar';
+        return new Promise(function (listo) {
+            var fin = function (si) { $('conf-si').onclick = $('conf-no').onclick = d.onclose = null; if (d.open) d.close(); listo(si); };
+            $('conf-si').onclick = function () { fin(true); };
+            $('conf-no').onclick = function () { fin(false); };
+            d.onclose = function () { fin(false); }; // Esc o "atrás" del celular
+            d.showModal();
+            $('conf-no').focus();
+        });
+    }
     // Pide confirmación y borra la fila de la hoja. Devuelve true si se eliminó.
     function eliminar(id) {
         var r = registros.find(function (x) { return x.ID === id; });
         if (!r) return Promise.resolve(false);
         var nombre = r.LOTE ? 'del lote ' + r.LOTE : 'de ' + (r.MICRORRUTA || id);
-        if (!confirm('¿Eliminar la visita ' + nombre + ' del ' + (r['FECHA DE LA VISITA'] || '—') + ' (' + id + ')?\nSe borrará la fila de la hoja.')) return Promise.resolve(false);
+        return confirmar('¿Eliminar la visita?', 'Visita ' + (esOp(r) ? 'durante la operación ' : '') + nombre + ' del ' + (r['FECHA DE LA VISITA'] || '—') + ' (' + id + ').\nSe borrará la fila de la hoja.', '🗑 Eliminar')
+            .then(function (si) { return si ? borrar(id) : false; });
+    }
+    function borrar(id) {
+        toast('Eliminando ' + id + '…');
         return enviar('eliminar', { id: id }).then(function () {
             registros = registros.filter(function (x) { return x.ID !== id; });
             guardarCache();
@@ -766,6 +817,8 @@
         $('campo-visita').classList.toggle('doble', tipoForm !== OP);
         $('campo-visita').classList.toggle('ancho', tipoForm === OP);
         form.querySelectorAll('.solo-ej').forEach(function (b) { b.hidden = tipoForm === OP; });
+        $('dlg-recordatorios').hidden = tipoForm !== OP || !recordatorios.length;
+        $('dlg-recordatorios').innerHTML = '<b>📌 Tener en cuenta</b><ul>' + recordatorios.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>';
         $('items-titulo').textContent = tipoForm === OP ? 'Ítems de la operación (SI = cumple · NO = requiere subsanación)' : 'Ítems revisados (SI = cumple · NO = requiere subsanación)';
         pintarItems(r || {}, nuevo);
         actualizarEstadoForm();
@@ -857,7 +910,8 @@
     function subsanar(r) {
         var enNo = itemsEnNo(r);
         abrir(r, { html: '✓ Subsanando <b>' + esc(r.MICRORRUTA || '') + (r.LOTE ? ' · Lote ' + esc(r.LOTE) : '') + '</b><br>' +
-            'Se marcaron en SI: ' + enNo.map(esc).join(', ') + '. Revise, agregue la observación o evidencia y guarde.' });
+            'Se marcaron en SI: ' + enNo.map(esc).join(', ') + '. Revise, agregue la observación y guarde.<br>' +
+            '📌 <b style="font-size:13px">Adjunte la evidencia ahora:</b> la interventoría la pide al momento de subsanar, no después.' });
         enNo.forEach(function (it) { var el = $('it' + itemsDe(r).indexOf(it) + 'si'); if (el) el.checked = true; });
         form.querySelector('[data-campo="FECHA SUBSANACIÓN"]').value = hoy();
         actualizarEstadoForm();
@@ -1493,16 +1547,21 @@
             return toast(accion === 'despues' ? 'Lote ' + b.dataset.id + ' pasó al final. Cuando quiera hacerlo, toque "Hacer ahora".' : 'Lote ' + b.dataset.id + ' es ahora el siguiente.');
         }
         if (accion === 'quitar') {
-            if (!confirm('¿Quitar esta pre-ruta? Las visitas registradas no se borran.')) return;
-            rutas.splice(+b.dataset.ri, 1); guardarRutas(); subirRuta({ cuad: ruta.cuad, paradas: [] }); return pintarRutas();
+            return confirmar('¿Quitar esta pre-ruta?', 'Cuadrilla ' + (ruta.cuad || '—') + '. Las visitas registradas no se borran.', 'Quitar').then(function (si) {
+                if (!si || rutas.indexOf(ruta) === -1) return;
+                rutas.splice(rutas.indexOf(ruta), 1); guardarRutas(); subirRuta({ cuad: ruta.cuad, paradas: [] }); pintarRutas();
+            });
         }
         // Quita un solo lote; si era el último, se va la pre-ruta completa
         if (accion === 'quitar-parada') {
-            if (!confirm('¿Quitar el lote ' + b.dataset.id + ' de esta pre-ruta? Las visitas registradas no se borran.')) return;
-            ruta.paradas = ruta.paradas.filter(function (p) { return p.id !== b.dataset.id; });
-            if (!ruta.paradas.length) rutas.splice(+b.dataset.ri, 1);
-            guardarRutas(); subirRuta(ruta); pintarRutas();
-            return toast('Lote ' + b.dataset.id + ' quitado de la pre-ruta.');
+            var idQ = b.dataset.id;
+            return confirmar('¿Quitar el lote ' + idQ + '?', 'Sale de la pre-ruta de la cuadrilla ' + (ruta.cuad || '—') + '. Las visitas registradas no se borran.', 'Quitar').then(function (si) {
+                if (!si) return;
+                ruta.paradas = ruta.paradas.filter(function (p) { return p.id !== idQ; });
+                if (!ruta.paradas.length && rutas.indexOf(ruta) !== -1) rutas.splice(rutas.indexOf(ruta), 1);
+                guardarRutas(); subirRuta(ruta); pintarRutas();
+                toast('Lote ' + idQ + ' quitado de la pre-ruta.');
+            });
         }
         if (accion === 'registrar' || accion === 'operacion') {
             var ri = +b.dataset.ri, id = b.dataset.id, tipo = accion === 'operacion' ? OP : EJ;
