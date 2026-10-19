@@ -931,8 +931,17 @@ updateDynamicFilters();
     var selector = document.getElementById('search-types');
     var entrada = document.getElementById('search-values');
     var tipos = Array.prototype.slice.call(selector.selectedOptions).map(function(option){ return option.value; });
-    if(tipos.indexOf('direccion') !== -1) { buscarDireccion(entrada.value); return; }
-    var valores = entrada.value.split(',').map(function(valor){ return valor.trim().toLowerCase(); }).filter(Boolean);
+    // Coordenadas pegadas (6,2887N 75,5556W, link de Google Maps...): se ubican sin importar el campo elegido
+    if(tipos.indexOf('direccion') !== -1 || window.leerCoordenadas(entrada.value)) { buscarDireccion(entrada.value); return; }
+    // "NA" (sin lote) no es un lote: marcaría todas las zonas sin número
+    var valores = entrada.value.split(',').map(function(valor){ return valor.trim().toLowerCase(); }).filter(function(valor){ return valor && valor !== 'na'; });
+    // Fila pegada de la programación ("4  Z1CC0138  NA  Versalles No. 2..."): se toma solo el código de microrruta
+    valores = [].concat.apply([], valores.map(function(valor){
+        var codigos = /\s/.test(valor) && valor.match(/\bz\d+[a-z]{2}\d+\b/g);
+        return codigos || [valor];
+    }));
+    // Un código como Z1CC0138 se busca por microrruta aunque esté elegido "Lote" (las zonas sin lote solo tienen microrruta)
+    if(valores.some(function(valor){ return /^z\d+[a-z]{2}\d+$/.test(valor); }) && tipos.indexOf('microruta') === -1) tipos.push('microruta');
     if(!tipos.length || !valores.length) {
         alert('Seleccione al menos un campo e ingrese uno o varios valores.');
         return;
@@ -2011,6 +2020,7 @@ function updateSelect(id, values){
             });
             updateDynamicFilters();
         </script>        
+        <script src="js/coordenadas.js"></script>
         <script src="js/buscar_direccion.js"></script>
         <script>
             // Búsqueda directa desde otras páginas: index.html?lote=975 o index.html?mr=Z4CC0155

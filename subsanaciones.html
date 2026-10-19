@@ -388,7 +388,7 @@
         'OBSERVACIONES NOVEDADES', 'ESTADO', 'FECHA SUBSANACIÓN', 'OBSERVACIÓN SUBSANACIÓN', 'EVIDENCIA', 'ID', 'REGISTRADO POR', 'ÚLTIMA MODIFICACIÓN'];
     var FECHAS = ['FECHA DE EJECUCIÓN', 'FECHA DE LA VISITA', 'FECHA SUBSANACIÓN'];
     var items = [], columnas = [], registros = [], editando = null, abiertos = {};
-    var cargado = false, alCargar = null, desdeRuta = null;
+    var cargado = false, alCargar = null, desdeRuta = null, rutasAlDia = false;
     var $ = function (id) { return document.getElementById(id); };
     var dlg = $('dlg'), form = $('form');
 
@@ -506,6 +506,8 @@
         llenarSelect('f-zona', 'ZONA', 'Zona: todas');
         llenarSelect('f-cuadrilla', 'CUADRILLA', 'Cuadrilla: todas');
         if (d.rutas) rutasDeHoja(d.rutas, desdeCache);
+        // Con la copia del celular la pre-ruta puede estar vieja: no se toca la hoja hasta que llegue la de verdad
+        if (!desdeCache) rutasAlDia = true;
         cargado = true;
         pintar();
         abrirDesdeUrl(!desdeCache);
@@ -1265,7 +1267,21 @@
         try { localStorage.setItem('subsanaciones_plegadas', JSON.stringify(plegadas)); } catch (e) {}
     }
 
+    // Lote ya revisado (tiene visita registrada): sale de la pre-ruta; la visita sigue en la tabla de abajo
+
+    function quitarRevisadas() {
+        if (!cargado || (modoHoja && !rutasAlDia)) return;
+        rutas = rutas.filter(function (ruta) {
+            var antes = ruta.paradas.length;
+            ruta.paradas = ruta.paradas.filter(function (p) { return !visitaDe(p, infoLote(p.id)); });
+            if (ruta.paradas.length !== antes) subirRuta(ruta);
+            return ruta.paradas.length > 0;
+        });
+        guardarRutas();
+    }
+
     function pintarRutas() {
+        quitarRevisadas();
         var cont = $('ruta');
         if (!rutas.length) {
             cont.innerHTML = '<button type="button" class="ruta-vacia" data-ruta="nueva">📋 <b>Cargar lotes a revisar</b>' +
@@ -1302,7 +1318,8 @@
                     '<button type="button" class="ruta-plegar" data-ruta="plegar" data-ri="' + ri + '" aria-expanded="' + !plegada + '" aria-label="Plegar o desplegar">▾</button>' +
                     '<div data-ruta="plegar" data-ri="' + ri + '"><b>' + (ruta.cuad ? 'Cuadrilla ' + esc(ruta.cuad) : 'Pre-ruta') + '</b>' +
                     (fechas.length ? ' <span class="sub">· ejec. ' + esc(fechas.map(function (f) { return aTexto(f).slice(0, 5); }).join(', ')) + '</span>' : '') +
-                    '<div class="sub">' + (hechas === paradas.length ? '✓ Ruta completa · ' : '') + hechas + ' de ' + paradas.length + ' revisados' +
+                    '<div class="sub">' + (hechas ? (hechas === paradas.length ? '✓ Ruta completa · ' : '') + hechas + ' de ' + paradas.length + ' revisados'
+                                                  : paradas.length + ' por revisar') +
                         (llegada ? ' · 🕒 en orden de llegada' : '') + '</div></div>' +
                     '<button type="button" class="ruta-quitar" data-ruta="quitar" data-ri="' + ri + '" aria-label="Quitar pre-ruta">×</button></div>' +
                 '<div class="progreso"><span style="width:' + Math.round(100 * hechas / paradas.length) + '%"></span></div>' +
@@ -1343,6 +1360,7 @@
                             (x.visita || x.encurso || pend.length < 2 ? '' : x.despues
                                 ? '<button type="button" class="secundario pequeno" data-ruta="ahora" data-ri="' + ri + '" data-id="' + esc(x.id) + '">Hacer ahora</button>'
                                 : '<button type="button" class="secundario pequeno" data-ruta="despues" data-ri="' + ri + '" data-id="' + esc(x.id) + '">⤓ Después</button>') +
+                            '<button type="button" class="secundario pequeno" data-ruta="quitar-parada" data-ri="' + ri + '" data-id="' + esc(x.id) + '" title="Quitar de la pre-ruta" aria-label="Quitar de la pre-ruta">✕</button>' +
                         '</div></li>';
                 }).join('') + '</ol></div>';
         }).join('') + '<button type="button" class="secundario pequeno otra" data-ruta="nueva">+ Otra pre-ruta</button>';
@@ -1364,6 +1382,14 @@
         if (accion === 'quitar') {
             if (!confirm('¿Quitar esta pre-ruta? Las visitas registradas no se borran.')) return;
             rutas.splice(+b.dataset.ri, 1); guardarRutas(); subirRuta({ cuad: ruta.cuad, paradas: [] }); return pintarRutas();
+        }
+        // Quita un solo lote; si era el último, se va la pre-ruta completa
+        if (accion === 'quitar-parada') {
+            if (!confirm('¿Quitar el lote ' + b.dataset.id + ' de esta pre-ruta? Las visitas registradas no se borran.')) return;
+            ruta.paradas = ruta.paradas.filter(function (p) { return p.id !== b.dataset.id; });
+            if (!ruta.paradas.length) rutas.splice(+b.dataset.ri, 1);
+            guardarRutas(); subirRuta(ruta); pintarRutas();
+            return toast('Lote ' + b.dataset.id + ' quitado de la pre-ruta.');
         }
         if (accion === 'registrar') {
             var ri = +b.dataset.ri, id = b.dataset.id;
