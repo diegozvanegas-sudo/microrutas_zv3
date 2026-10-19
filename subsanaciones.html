@@ -100,6 +100,11 @@
     .ruta-cab > div { flex: 1; min-width: 0; }
     .ruta-cab b { font-size: 16px; }
     .ruta-quitar { background: transparent; color: var(--muted); padding: 4px 8px; font-size: 20px; line-height: 1; }
+    .ruta-cab [data-ruta="plegar"] { cursor: pointer; }
+    .ruta-plegar { background: transparent; color: var(--muted); padding: 4px 8px; font-size: 18px; line-height: 1; transition: transform .2s; }
+    .ruta-card.plegada .ruta-plegar { transform: rotate(-90deg); }
+    .ruta-card.plegada .ruta-acciones, .ruta-card.plegada .paradas { display: none; }
+    .ruta-card.plegada .progreso { margin-bottom: 12px; }
     .progreso { height: 6px; background: #e8efec; margin: 0 14px; border-radius: 99px; overflow: hidden; }
     .progreso span { display: block; height: 100%; background: var(--ok); }
     .ruta-acciones { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; }
@@ -114,6 +119,8 @@
     .parada .dir { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .parada .alerta { color: var(--pend); }
     .parada .btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .no-realizado { color: var(--pend); background: var(--pend-bg); }
+    .tag-despues { font-size: 11px; font-weight: 700; color: var(--muted); background: #eef2f4; padding: 1px 7px; border-radius: 99px; }
     .tag-sig { font-size: 11px; font-weight: 700; color: #fff; background: var(--brand); padding: 1px 7px; border-radius: 99px; }
     .chip-ruta { display: inline-block; margin: 6px 6px 0 0; padding: 4px 9px; border-radius: 8px; background: #edf8f3; font-size: 13px; }
     .chip-ruta.aviso { background: #fff7ed; color: #9a3412; }
@@ -139,7 +146,8 @@
     .visita:last-child { border-bottom: 0; }
     .visita summary { list-style: none; cursor: pointer; padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; }
     .visita summary::-webkit-details-marker { display: none; }
-    .visita .mr { font-weight: 700; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .visita .mr { font-weight: 800; font-size: 19px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .visita .mr .cod { font-weight: 500; font-size: 13px; color: var(--muted); margin-left: 6px; }
     .visita .linea { grid-column: 1; font-size: 13px; color: var(--muted); }
     .visita .linea .alerta { color: var(--pend); font-weight: 650; }
     .visita .ver { grid-column: 2; justify-self: end; font-size: 13px; font-weight: 650; color: var(--brand); white-space: nowrap; }
@@ -154,6 +162,8 @@
     .detalle dt { font-size: 11px; color: var(--muted); font-weight: 650; text-transform: uppercase; }
     .detalle dd { margin: 2px 0 0; overflow-wrap: anywhere; }
     .detalle .editar { width: 100%; padding: 11px; }
+    .detalle .subsanar { width: 100%; padding: 11px; margin-bottom: 8px; color: #fff; background: var(--ok); border-color: var(--ok); }
+    .detalle .subsanar.pequeno { width: auto; padding: 6px 10px; margin: 8px 8px 0 0; }
     tr.fila-detalle td { padding: 0; }
     tr.fila-detalle .detalle { padding: 14px 16px; border-left: 3px solid var(--brand); }
     tr.fila-detalle .detalle dl { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
@@ -253,7 +263,10 @@
             <fieldset class="ancho">
                 <legend>Ítems revisados (SI = cumple · NO = requiere subsanación)</legend>
                 <div id="items"></div>
-                <div style="margin-top:8px"><button type="button" class="secundario pequeno" id="todo-si">Marcar todos SI</button></div>
+                <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap">
+                    <button type="button" class="secundario pequeno" id="todo-si">Marcar todos SI</button>
+                    <button type="button" class="pequeno no-realizado" id="no-realizado">✗ Lote no realizado</button>
+                </div>
             </fieldset>
             <label class="ancho">OBSERVACIONES NOVEDADES <textarea data-campo="OBSERVACIONES NOVEDADES" placeholder="SIN NOVEDAD"></textarea></label>
             <fieldset class="ancho">
@@ -363,6 +376,21 @@
     }
 
     // Deja cada registro con los nombres de columna conocidos aunque en la hoja tengan otra tilde o espacios
+    // Visita más reciente primero; el mismo día, la última registrada (ID mayor) arriba.
+    // Acepta 18/10/2026, 18-10-26, 2026-10-18 o con hora, como venga del Excel pegado en la hoja.
+    function claveFecha(s) {
+        s = String(s || '').trim();
+        var m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+        if (m) return m[1] + ('0' + m[2]).slice(-2) + ('0' + m[3]).slice(-2);
+        m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})\b/);
+        return m ? (m[3].length === 2 ? '20' + m[3] : m[3]) + ('0' + m[2]).slice(-2) + ('0' + m[1]).slice(-2) : '';
+    }
+    function ordenarRegistros() {
+        var num = function (r) { return Number(String(r.ID || '').replace(/\D/g, '')) || 0; };
+        registros.sort(function (a, b) {
+            return claveFecha(b['FECHA DE LA VISITA']).localeCompare(claveFecha(a['FECHA DE LA VISITA'])) || num(b) - num(a);
+        });
+    }
     function canonico(r) {
         var porNorm = {};
         Object.keys(r).forEach(function (k) { porNorm[norm(k)] = r[k]; });
@@ -392,9 +420,8 @@
             aviso('');
             items = d.items || [];
             columnas = d.columnas || [];
-            registros = (d.registros || []).map(canonico).sort(function (a, b) {
-                return aInput(b['FECHA DE LA VISITA']).localeCompare(aInput(a['FECHA DE LA VISITA'])) || String(b.ID).localeCompare(String(a.ID));
-            });
+            registros = (d.registros || []).map(canonico);
+            ordenarRegistros();
             llenarSelect('f-zona', 'ZONA', 'Todas las zonas');
             llenarSelect('f-cuadrilla', 'CUADRILLA', 'Todas las cuadrillas');
             if (d.rutas) rutasDeHoja(d.rutas);
@@ -468,8 +495,8 @@
     function tarjetaMovil(r) {
         var enNo = itemsEnNo(r), d = r.ESTADO === 'PENDIENTE' ? dias(r['FECHA DE LA VISITA']) : null;
         return '<details class="visita"' + (abiertos[r.ID] ? ' open' : '') + ' data-id="' + esc(r.ID) + '"><summary>' +
-            '<span class="mr">' + esc(r.MICRORRUTA || '—') + '</span>' + badge(r.ESTADO) +
-            '<span class="linea">Lote ' + esc(r.LOTE || '—') + ' · ' + esc(r['FECHA DE LA VISITA'] || '—') +
+            '<span class="mr">' + (r.LOTE ? 'Lote ' + esc(r.LOTE) + '<span class="cod">' + esc(r.MICRORRUTA || '') + '</span>' : esc(r.MICRORRUTA || '—')) + '</span>' + badge(r.ESTADO) +
+            '<span class="linea">' + esc(r['FECHA DE LA VISITA'] || '—') +
                 (enNo.length ? ' · <span class="alerta">' + enNo.length + ' en NO</span>' : '') +
                 (d != null ? ' · <span class="alerta">' + d + ' d</span>' : '') + '</span>' +
             '<span class="ver"><span class="mas">Ver detalles</span><span class="menos">Ocultar</span></span>' +
@@ -491,7 +518,8 @@
             dato('Fecha subsanación', esc(r['FECHA SUBSANACIÓN'])) + dato('Registrado por', esc(r['REGISTRADO POR'])) +
             dato('Observación subsanación', esc(r['OBSERVACIÓN SUBSANACIÓN']), true) +
             dato('Evidencia', /^https?:\/\//i.test(r.EVIDENCIA || '') ? '<a href="' + esc(r.EVIDENCIA) + '" target="_blank" rel="noopener">Abrir fotos</a>' : esc(r.EVIDENCIA), true) +
-            '</dl>' + (conEditar ? '<button type="button" class="primario editar" data-editar="' + esc(r.ID) + '">Editar</button>' : '') +
+            '</dl>' + (r.ESTADO === 'PENDIENTE' ? '<button type="button" class="subsanar' + (conEditar ? '' : ' pequeno') + '" data-subsanar="' + esc(r.ID) + '">✓ Marcar subsanado</button>' : '') +
+            (conEditar ? '<button type="button" class="primario editar" data-editar="' + esc(r.ID) + '">Editar</button>' : '') +
             (enNo.length ? '<button type="button" class="wa' + (conEditar ? ' wa-btn' : ' pequeno') + '" data-wa="' + esc(r.ID) + '">Resumen WhatsApp</button>' : '') + '</div>';
     }
 
@@ -502,8 +530,9 @@
         var saludo = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
         var cuad = String(r.CUADRILLA || '').trim();
         if (/^\d+$/.test(cuad)) cuad = 'C' + cuad;
-        var lineas = itemsEnNo(r).map(function (i) { return '- ' + frase(i).replace(/\.?$/, '.'); });
         var obs = String(r['OBSERVACIONES NOVEDADES'] || '').trim();
+        // Lote no realizado: no se listan todos los ítems, basta con decirlo
+        var lineas = norm(obs).indexOf(NO_REALIZADO) !== -1 ? [] : itemsEnNo(r).map(function (i) { return '- ' + frase(i).replace(/\.?$/, '.'); });
         if (obs && norm(obs) !== 'SIN NOVEDAD') lineas.push('- ' + frase(obs).replace(/\.?$/, '.'));
         return saludo + '\n\n' +
             'Novedad' + (cuad ? ' ' + cuad : '') + '\n\n' +
@@ -585,6 +614,17 @@
         dlg.scrollTop = 0; // el celular recuerda dónde quedó la ventana anterior
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     }
+    // Abre la visita con los ítems en NO pasados a SI y la fecha de hoy: al guardar queda SUBSANADO
+    function subsanar(r) {
+        var enNo = itemsEnNo(r);
+        abrir(r, { html: '✓ Subsanando <b>' + esc(r.MICRORRUTA || '') + (r.LOTE ? ' · Lote ' + esc(r.LOTE) : '') + '</b><br>' +
+            'Se marcaron en SI: ' + enNo.map(esc).join(', ') + '. Revise, agregue la observación o evidencia y guarde.' });
+        enNo.forEach(function (it) { var el = $('it' + items.indexOf(it) + 'si'); if (el) el.checked = true; });
+        form.querySelector('[data-campo="FECHA SUBSANACIÓN"]').value = hoy();
+        actualizarEstadoForm();
+        var obs = form.querySelector('[data-campo="OBSERVACIÓN SUBSANACIÓN"]');
+        setTimeout(function () { obs.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
+    }
     function ocupado(si) { ['btn-guardar', 'btn-eliminar', 'btn-cancelar'].forEach(function (id) { $(id).disabled = si; }); }
 
     form.addEventListener('submit', function (ev) {
@@ -604,6 +644,7 @@
             var nuevo = canonico(d.registro);
             var i = registros.findIndex(function (x) { return x.ID === nuevo.ID; });
             if (i === -1) registros.unshift(nuevo); else registros[i] = nuevo;
+            ordenarRegistros();
             dlg.close();
             llenarSelect('f-zona', 'ZONA', 'Todas las zonas');
             llenarSelect('f-cuadrilla', 'CUADRILLA', 'Todas las cuadrillas');
@@ -635,6 +676,15 @@
     $('todo-si').onclick = function () {
         items.forEach(function (it, i) { var el = $('it' + i + 'si'); if (el) el.checked = true; });
         actualizarEstadoForm();
+    };
+    // La cuadrilla no ejecutó el lote: todo en NO y la observación lo dice (queda PENDIENTE)
+    var NO_REALIZADO = 'LOTE NO REALIZADO';
+    $('no-realizado').onclick = function () {
+        items.forEach(function (it, i) { var el = $('it' + i + 'no'); if (el) el.checked = true; });
+        var obs = form.querySelector('[data-campo="OBSERVACIONES NOVEDADES"]');
+        if (norm(obs.value).indexOf(NO_REALIZADO) === -1) obs.value = NO_REALIZADO + (obs.value.trim() && norm(obs.value) !== 'SIN NOVEDAD' ? '. ' + obs.value.trim() : '');
+        actualizarEstadoForm();
+        obs.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
     $('items').addEventListener('change', actualizarEstadoForm);
 
@@ -761,10 +811,14 @@
         desdeUrlHecho = true;
         var q = new URLSearchParams(location.search), mr = q.get('mr') || '', lote = q.get('lote') || '';
         if (!mr && !lote) return;
+        // Se usa una sola vez: si el celular recarga la pestaña o vuelve a ella, muestra la lista y no el formulario
+        try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
         $('f-texto').value = mr || lote;
         pintar();
         abrir({ MICRORRUTA: mr, LOTE: lote });
         if (mr) completar(mr); else if (mrPorLote[lote]) completar(mrPorLote[lote]);
+        // Al cerrar el formulario se quita el filtro de ese lote y queda la lista completa
+        dlg.addEventListener('close', function () { if ($('f-texto').value === (mr || lote)) { $('f-texto').value = ''; pintar(); } }, { once: true });
     }
 
     // ---------- Pre-ruta: lotes que mandan a revisar (se guarda en este celular) ----------
@@ -792,6 +846,14 @@
         }).forEach(function (r) {
             var id = /^\d+$/.test(r.lote) ? String(+r.lote) : r.lote;
             agregarParadas(r.cuadrilla, [{ id: id, fecha: aInput(r.fecha), creada: aInput(r.cargada) || hoy() }]);
+        });
+        // La hoja guarda el orden pero no la marca "para después": se conserva la de este celular
+        locales.forEach(function (l) {
+            var ruta = rutas.find(function (r) { return r.cuad === l.cuad; });
+            if (ruta) l.paradas.forEach(function (p) {
+                var q = p.despues && ruta.paradas.find(function (x) { return x.id === p.id; });
+                if (q) q.despues = true;
+            });
         });
         if (migrar) locales.forEach(function (l) {
             var ruta = agregarParadas(l.cuad, l.paradas);
@@ -857,7 +919,7 @@
         var d = ev.target.closest('[data-desc]');
         if (d) return d.classList.toggle('abierta');
         var b = ev.target.closest('[data-abrir-visita]');
-        if (b) abrir(registros.find(function (r) { return r.ID === b.dataset.abrirVisita; }));
+        if (b) subsanar(registros.find(function (r) { return r.ID === b.dataset.abrirVisita; }));
     });
     function visitaDe(p, x) {
         return registros.find(function (r) {
@@ -873,11 +935,22 @@
     function textoDist(m) { return m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
     function urlIr(c) { return 'https://www.google.com/maps/dir/?api=1&destination=' + c[0] + ',' + c[1] + '&travelmode=driving'; }
 
-    // Pendientes primero en el recorrido más corto; luego los que no tienen ubicación y al final los ya revisados
+    // Pendientes primero en el recorrido más corto; luego los dejados para después, los que no tienen ubicación y al final los ya revisados
     function ordenar(ruta, desde) {
-        var pend = [], hechos = [], sinC = [];
-        ruta.paradas.forEach(function (p) { var x = infoLote(p.id); (visitaDe(p, x) ? hechos : x.c ? pend : sinC).push(p); });
-        ruta.paradas = recorridoCorto(pend, desde).concat(sinC, hechos);
+        var pend = [], despues = [], hechos = [], sinC = [];
+        ruta.paradas.forEach(function (p) { var x = infoLote(p.id); (visitaDe(p, x) ? hechos : p.despues ? despues : x.c ? pend : sinC).push(p); });
+        ruta.paradas = recorridoCorto(pend, desde).concat(despues, sinC, hechos);
+    }
+    // "Después": pasa la parada al final de las pendientes; "Hacer ahora": la vuelve la siguiente
+    function aplazar(ruta, id, si) {
+        var n = ruta.paradas.findIndex(function (p) { return p.id === id; });
+        if (n === -1) return;
+        var p = ruta.paradas.splice(n, 1)[0];
+        if (si) p.despues = true; else delete p.despues;
+        var pendiente = function (q) { return !visitaDe(q, infoLote(q.id)); };
+        var k = si ? ruta.paradas.reduce(function (u, q, i) { return pendiente(q) ? i + 1 : u; }, 0)
+                   : Math.max(0, ruta.paradas.findIndex(pendiente));
+        ruta.paradas.splice(k, 0, p);
     }
     // Vecino más cercano (probando cada lote como inicio si no hay ubicación) y luego 2-opt: deshace los cruces del recorrido
     function recorridoCorto(ps, desde) {
@@ -916,6 +989,14 @@
         if (antiguas) { rutas.forEach(function (r) { ordenar(r, null); }); guardarRutas(); }
     })();
 
+    // Pre-rutas plegadas en este dispositivo, por cuadrilla
+    var plegadas;
+    try { plegadas = JSON.parse(localStorage.getItem('subsanaciones_plegadas')) || {}; } catch (e) { plegadas = {}; }
+    function plegar(cuad, si) {
+        if (si) plegadas[cuad || ''] = 1; else delete plegadas[cuad || ''];
+        try { localStorage.setItem('subsanaciones_plegadas', JSON.stringify(plegadas)); } catch (e) {}
+    }
+
     function pintarRutas() {
         var cont = $('ruta');
         if (!rutas.length) {
@@ -924,7 +1005,7 @@
             return;
         }
         cont.innerHTML = rutas.map(function (ruta, ri) {
-            var paradas = ruta.paradas.map(function (p) { var x = infoLote(p.id); x.fecha = p.fecha; x.visita = visitaDe(p, x); return x; });
+            var paradas = ruta.paradas.map(function (p) { var x = infoLote(p.id); x.fecha = p.fecha; x.despues = p.despues; x.visita = visitaDe(p, x); return x; });
             var fechas = paradas.map(function (x) { return x.fecha; }).filter(function (f, i, a) { return f && a.indexOf(f) === i; }).sort();
             var hechas = paradas.filter(function (x) { return x.visita; }).length;
             var pend = paradas.filter(function (x) { return !x.visita; }), sig = pend[0];
@@ -933,8 +1014,11 @@
                 (proximas.length > 1 ? '&waypoints=' + encodeURIComponent(proximas.slice(0, -1).map(function (x) { return x.c.join(','); }).join('|')) : '') + '&travelmode=driving' : '';
             var conLote = paradas.filter(function (x) { return x.lote; }).map(function (x) { return x.lote; });
             var prev = posicion, prevUsted = !!posicion;
-            return '<div class="ruta-card">' +
-                '<div class="ruta-cab"><div><b>' + (ruta.cuad ? 'Cuadrilla ' + esc(ruta.cuad) : 'Pre-ruta') + '</b>' +
+            var plegada = !!plegadas[ruta.cuad || ''];
+            return '<div class="ruta-card' + (plegada ? ' plegada' : '') + '">' +
+                '<div class="ruta-cab">' +
+                    '<button type="button" class="ruta-plegar" data-ruta="plegar" data-ri="' + ri + '" aria-expanded="' + !plegada + '" aria-label="Plegar o desplegar">▾</button>' +
+                    '<div data-ruta="plegar" data-ri="' + ri + '"><b>' + (ruta.cuad ? 'Cuadrilla ' + esc(ruta.cuad) : 'Pre-ruta') + '</b>' +
                     (fechas.length ? ' · ejecutados ' + esc(fechas.map(aTexto).join(', ')) : '') +
                     '<div class="sub">' + (hechas === paradas.length ? '✓ Ruta completa · ' : '') + hechas + ' de ' + paradas.length + ' revisados</div></div>' +
                     '<button type="button" class="ruta-quitar" data-ruta="quitar" data-ri="' + ri + '" aria-label="Quitar pre-ruta">×</button></div>' +
@@ -953,7 +1037,8 @@
                         '<div class="info"><div class="titulo"><b>' + esc(x.lote ? 'Lote ' + x.lote : x.mr) + '</b>' +
                             (x.lote && x.mr ? ' <span class="sub">' + esc(x.mr) + '</span>' : '') +
                             (fechas.length > 1 && x.fecha ? ' <span class="sub">· ejec. ' + esc(aTexto(x.fecha).slice(0, 5)) + '</span>' : '') +
-                            (x === sig ? ' <span class="tag-sig">Siguiente</span>' : '') + (x.visita ? ' ' + badge(x.visita.ESTADO) : '') + '</div>' +
+                            (x === sig ? ' <span class="tag-sig">Siguiente</span>' : '') +
+                            (x.despues && !x.visita ? ' <span class="tag-despues">Para después</span>' : '') + (x.visita ? ' ' + badge(x.visita.ESTADO) : '') + '</div>' +
                             (x.d ? '<div class="sub dir">' + esc(x.d) + '</div>' : '') +
                             (aviso ? '<div class="sub alerta">' + esc(aviso) + '</div>' : '') +
                             (dist && !x.visita ? '<div class="sub">📍 ' + dist + '</div>' : '') + '</div>' +
@@ -962,6 +1047,9 @@
                                       : '<button type="button" class="primario pequeno" data-ruta="registrar" data-ri="' + ri + '" data-id="' + esc(x.id) + '">Registrar</button>') +
                             (x.c && !x.visita ? '<a class="boton secundario pequeno" target="_blank" rel="noopener" href="' + esc(urlIr(x.c)) + '">Cómo llegar</a>' : '') +
                             (x.mr || x.lote ? '<a class="boton secundario pequeno" href="' + esc(urlMapa(x.mr, x.lote)) + '">Mapa</a>' : '') +
+                            (x.visita || pend.length < 2 ? '' : x.despues
+                                ? '<button type="button" class="secundario pequeno" data-ruta="ahora" data-ri="' + ri + '" data-id="' + esc(x.id) + '">Hacer ahora</button>'
+                                : '<button type="button" class="secundario pequeno" data-ruta="despues" data-ri="' + ri + '" data-id="' + esc(x.id) + '">Después ⤓</button>') +
                         '</div></li>';
                 }).join('') + '</ol></div>';
         }).join('') + '<button type="button" class="secundario pequeno otra" data-ruta="nueva">+ Otra pre-ruta</button>';
@@ -974,6 +1062,12 @@
         if (!b) return;
         var ruta = rutas[+b.dataset.ri], accion = b.dataset.ruta;
         if (accion === 'nueva') return abrirDlgRuta();
+        if (accion === 'plegar') { plegar(ruta.cuad, !plegadas[ruta.cuad || '']); return pintarRutas(); }
+        if (accion === 'despues' || accion === 'ahora') {
+            aplazar(ruta, b.dataset.id, accion === 'despues');
+            guardarRutas(); subirRuta(ruta); pintarRutas();
+            return toast(accion === 'despues' ? 'Lote ' + b.dataset.id + ' pasó al final. Cuando quiera hacerlo, toque "Hacer ahora".' : 'Lote ' + b.dataset.id + ' es ahora el siguiente.');
+        }
         if (accion === 'quitar') {
             if (!confirm('¿Quitar esta pre-ruta? Las visitas registradas no se borran.')) return;
             rutas.splice(+b.dataset.ri, 1); guardarRutas(); subirRuta({ cuad: ruta.cuad, paradas: [] }); return pintarRutas();
@@ -1052,6 +1146,7 @@
         guardarRutas();
         subirRuta(ruta);
         $('dlg-ruta').close();
+        plegar(ruta.cuad, false);
         pintarRutas();
         toast((existia ? 'Se sumaron a la cuadrilla ' + cuad + ' y se reordenó la ruta' : 'Pre-ruta creada y ordenada') + ' · ' + ruta.paradas.length + ' lotes.');
         var tarjeta = $('ruta').querySelectorAll('.ruta-card')[rutas.indexOf(ruta)];
@@ -1073,6 +1168,8 @@
     $('tabla').onclick = function (ev) {
         var b = ev.target.closest('[data-editar]');
         if (b) return abrir(registros.find(function (r) { return r.ID === b.dataset.editar; }));
+        var s = ev.target.closest('[data-subsanar]');
+        if (s) return subsanar(registros.find(function (r) { return r.ID === s.dataset.subsanar; }));
         var w = ev.target.closest('[data-wa]');
         if (w) return mostrarWhatsapp(registros.find(function (r) { return r.ID === w.dataset.wa; }));
         var v = ev.target.closest('[data-ver]');

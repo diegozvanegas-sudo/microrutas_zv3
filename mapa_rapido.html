@@ -39,6 +39,32 @@
     .parada-num { background: var(--brand); color: #fff; border: 2px solid #fff; border-radius: 50%; width: 28px !important; height: 28px !important; margin: -14px 0 0 -14px !important;
                   display: grid; place-items: center; font-weight: 700; font-size: 13px; box-shadow: 0 2px 6px rgba(0, 0, 0, .4); }
     .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; z-index: 2000; display: none; max-width: calc(100% - 32px); }
+    /* Ficha del lote: ventana en computador, panel desde abajo en el celular */
+    .ficha-lote { font-size: 14px; line-height: 1.35; color: var(--ink); }
+    .ficha-lote .cab { display: flex; align-items: center; gap: 8px; padding-right: 26px; }
+    .ficha-lote .titulo { font-size: 22px; font-weight: 800; }
+    .ficha-lote .cuad { color: #fff; font-weight: 700; font-size: 12px; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+    .ficha-lote .mr { color: var(--muted); font-size: 13px; margin-top: 2px; }
+    .ficha-lote .datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; margin: 10px 0; }
+    .ficha-lote .dato { background: var(--bg); border-radius: 8px; padding: 6px 9px; min-width: 0; }
+    .ficha-lote .et { display: block; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+    .ficha-lote .dato b { font-size: 14px; overflow-wrap: anywhere; }
+    .ficha-lote .bloque { margin: 0 0 10px; }
+    .ficha-lote .desc { display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+    .ficha-lote .desc.abierta { display: block; }
+    .ficha-lote .mas { color: var(--brand); font-size: 12px; font-weight: 700; cursor: pointer; }
+    .ficha-lote .acciones { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 4px; }
+    .ficha-lote .acciones .boton { text-align: center; padding: 11px 12px; font-size: 15px; }
+    .ficha-lote .acciones .subs { grid-column: 1 / -1; }
+    .leaflet-popup-content .ficha-lote { min-width: 250px; }
+    #ficha { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1002; background: var(--surface); border-radius: 16px 16px 0 0;
+             box-shadow: 0 -6px 24px rgba(0, 0, 0, .25); padding: 6px 16px calc(16px + env(safe-area-inset-bottom));
+             max-height: 62vh; overflow-y: auto; transform: translateY(105%); transition: transform .22s ease; }
+    #ficha.abierta { transform: none; }
+    #ficha .asa { width: 40px; height: 5px; border-radius: 3px; background: #cbd5db; margin: 2px auto 10px; }
+    #ficha .cerrar { position: absolute; top: 12px; right: 10px; background: var(--bg); color: var(--muted); width: 32px; height: 32px; padding: 0; border-radius: 50%; font-size: 20px; line-height: 32px; }
+    body.con-ficha .ir-subs { display: none; }
+    .ir-subs { position: fixed; right: 14px; bottom: calc(30px + env(safe-area-inset-bottom)); z-index: 1001; padding: 13px 18px; border-radius: 999px; font-size: 15px; box-shadow: 0 4px 14px rgba(0, 0, 0, .3); }
     @media (max-width: 760px) {
         #barra { padding: 8px 10px 6px; }
         .fila input { font-size: 16px; }
@@ -58,6 +84,8 @@
     <div id="estado"></div>
 </div>
 <div id="map"></div>
+<div id="ficha" role="dialog" aria-label="Datos del lote"><div class="asa"></div><button type="button" class="cerrar" id="ficha-cerrar" aria-label="Cerrar">×</button><div id="ficha-contenido"></div></div>
+<a class="boton primario ir-subs" href="subsanaciones.html" title="Ir a las subsanaciones y pre-rutas">📋 Subsanaciones</a>
 <div class="toast" id="toast"></div>
 
 <script src="js/leaflet.js"></script>
@@ -124,8 +152,7 @@
             var capa = L.polygon(p.g.map(function (pol) { return pol.map(decodificar); }), L.extend({ bubblingMouseEvents: false }, estiloLote(p.c)));
             delete p.g;
             capa.lote = p;
-            capa.bindPopup(function () { return popupLote(capa); }, { maxHeight: 380, maxWidth: 300 });
-            capa.on('click', function () { resaltarMr(p.m); });
+            capa.on('click', function (e) { resaltarMr(p.m); verLote(capa, e.latlng); });
             g.addLayer(capa);
             if (p.l && p.l !== 'NA') (porLote[p.l] = porLote[p.l] || []).push(capa);
             if (p.m) (porMr[p.m.toUpperCase()] = porMr[p.m.toUpperCase()] || []).push(capa);
@@ -190,14 +217,50 @@
     }
     function popupLote(capa) {
         var p = capa.lote, zona = /^Z(\d+)/i.test(p.m || '') ? p.m.match(/^Z(\d+)/i)[1] : '';
-        var fila = function (t, v) { return v ? '<tr><td><b>' + t + '</b><br>' + esc(v) + '</td></tr>' : ''; };
+        var lote = p.l && p.l !== 'NA' ? p.l : '';
+        var dato = function (t, v) { return v ? '<div class="dato"><span class="et">' + t + '</span><b>' + esc(v) + '</b></div>' : ''; };
+        var area = Number(String(p.a || '').replace(',', '.'));
         var pt = puntoLote(capa), ll = pt.lat.toFixed(6) + ',' + pt.lng.toFixed(6);
-        return '<table>' + fila('Microrruta', p.m) + fila('Lote', p.l) + fila('Zona', zona) + fila('Comuna', p.k) + fila('Cuadrilla', p.c) +
-            fila('Área (m²)', p.a) + fila('Frecuencia', p.f) + fila('Dirección', p.d) + fila('Descripción', p.s) + '</table>' +
-            '<p style="margin:8px 0 0"><a href="https://www.google.com/maps/dir/?api=1&destination=' + ll + '" target="_blank" rel="noopener">Cómo llegar (Google Maps)</a> · ' +
-            '<a href="https://waze.com/ul?ll=' + ll + '&navigate=yes" target="_blank" rel="noopener">Waze</a></p>' +
-            '<p style="margin:6px 0 0"><a href="subsanaciones.html?mr=' + encodeURIComponent(p.m || '') + '&lote=' + encodeURIComponent(p.l || '') + '">Registrar subsanación</a></p>';
+        return '<div class="ficha-lote">' +
+            '<div class="cab"><span class="titulo">' + (lote ? 'Lote ' + esc(lote) : esc(p.m || 'Lote')) + '</span>' +
+                (p.c ? '<span class="cuad" style="background:' + colorCuadrilla(p.c) + '">Cuadrilla ' + esc(p.c) + '</span>' : '') + '</div>' +
+            '<div class="mr">' + [lote ? p.m : '', zona ? 'Zona ' + zona : ''].filter(Boolean).map(esc).join(' · ') + '</div>' +
+            '<div class="datos">' + dato('Comuna', p.k) + dato('Área', p.a ? (area ? area.toLocaleString('es-CO') : p.a) + ' m²' : '') + dato('Frecuencia', p.f) + '</div>' +
+            (p.d ? '<div class="bloque"><span class="et">Dirección</span>' + esc(p.d) + '</div>' : '') +
+            (p.s ? '<div class="bloque"><span class="et">Descripción</span><div class="desc" data-desc>' + esc(p.s) + '</div>' +
+                (p.s.length > 140 ? '<span class="mas" data-desc-mas>Ver todo ▾</span>' : '') + '</div>' : '') +
+            '<div class="acciones">' +
+                '<a class="boton primario" href="https://www.google.com/maps/dir/?api=1&destination=' + ll + '" target="_blank" rel="noopener">🧭 Cómo llegar</a>' +
+                '<a class="boton secundario" href="https://waze.com/ul?ll=' + ll + '&navigate=yes" target="_blank" rel="noopener">Waze</a>' +
+                '<a class="boton secundario subs" href="subsanaciones.html?mr=' + encodeURIComponent(p.m || '') + '&lote=' + encodeURIComponent(lote) + '">📋 Registrar subsanación</a>' +
+            '</div></div>';
     }
+    // Celular: panel desde abajo (no tapa el lote); computador: ventana sobre el mapa
+    var movil = window.matchMedia('(max-width: 760px)');
+    function verLote(capa, latlng) {
+        if (!movil.matches) {
+            L.popup({ maxHeight: 420, maxWidth: 330 }).setLatLng(latlng || puntoLote(capa)).setContent(popupLote(capa)).openOn(map);
+            return;
+        }
+        $('ficha-contenido').innerHTML = popupLote(capa);
+        $('ficha').scrollTop = 0;
+        $('ficha').classList.add('abierta');
+        document.body.classList.add('con-ficha');
+        // Si el lote quedó debajo del panel, se sube el mapa para verlo
+        setTimeout(function () {
+            var y = map.latLngToContainerPoint(latlng || puntoLote(capa)).y, alto = map.getSize().y - $('ficha').offsetHeight;
+            if (y > alto - 30) map.panBy([0, y - alto / 2], { animate: true });
+        }, 230);
+    }
+    function cerrarFicha() { $('ficha').classList.remove('abierta'); document.body.classList.remove('con-ficha'); }
+    $('ficha-cerrar').onclick = cerrarFicha;
+    document.addEventListener('click', function (ev) {
+        var m = ev.target.closest('[data-desc], [data-desc-mas]');
+        if (!m) return;
+        var bloque = m.parentNode, d = bloque.querySelector('[data-desc]'), mas = bloque.querySelector('[data-desc-mas]');
+        var abierta = d.classList.toggle('abierta');
+        if (mas) mas.textContent = abierta ? 'Ver menos ▴' : 'Ver todo ▾';
+    });
     function limpiarResaltado() {
         resaltados.forEach(function (c) { c.setStyle(estiloLote(c.lote.c)); });
         resaltados = [];
@@ -303,13 +366,13 @@
                 capas = capas.concat(cs);
                 if (claves.length > 1 && cs.length) {
                     L.marker(puntoLote(cs[0]), { icon: L.divIcon({ className: 'parada-num', html: String(i + 1) }), title: (k.esMr ? '' : 'Lote ') + k.v })
-                        .on('click', function () { cs[0].openPopup(); }).addTo(marcadores);
+                        .on('click', function () { verLote(cs[0]); }).addTo(marcadores);
                 }
             });
             if (!capas.length) return;
             resaltar(capas);
             map.fitBounds(L.featureGroup(capas).getBounds(), { padding: [30, 30], maxZoom: 18 });
-            if (abrirVentana && claves.length === 1) capas[0].openPopup(puntoLote(capas[0]));
+            if (abrirVentana && claves.length === 1) verLote(capas[0]);
         }
     }
     function buscar() {
@@ -320,7 +383,7 @@
     }
     $('btn-buscar').onclick = buscar;
     $('buscar').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); buscar(); } });
-    map.on('click', function () { limpiarResaltado(); });
+    map.on('click', function () { limpiarResaltado(); cerrarFicha(); });
 
     // ---------- Inicio ----------
     // mapa_rapido.html?lote=532,371  ·  ?mr=Z2CC0308  ·  ?c=2,7 (cuadrillas)
