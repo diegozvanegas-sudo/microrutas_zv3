@@ -525,9 +525,12 @@
         var btn = $('btn-recargar');
         btn.disabled = true;
         btn.textContent = '↻ Actualizando…';
+        var inicio = Date.now();
         leer().then(function (d) {
             aviso('');
-            ultimasRutas = d.rutas || null;
+            // Mientras se leía se cambió una pre-ruta aquí (p. ej. se quitó un lote): manda lo de este celular
+            if (ultimoCambioRuta >= inicio) delete d.rutas;
+            else ultimasRutas = d.rutas || null;
             aplicarDatos(d, false);
             guardarCache();
         }).catch(function (err) {
@@ -1127,11 +1130,20 @@
     // Sin eso (script viejo o sin conexión) se trabaja solo con la copia de este celular.
     var modoHoja = false;
     function guardarRutas() { try { localStorage.setItem('subsanaciones_rutas', JSON.stringify(rutas)); } catch (e) {} }
+    // Hora del último cambio hecho aquí a una pre-ruta: una lectura de la hoja que salió antes no lo deshace
+    var ultimoCambioRuta = 0;
     function subirRuta(ruta) {
         if (!modoHoja) return;
-        enviar('guardar_ruta', { cuadrilla: ruta.cuad, paradas: ruta.paradas.map(function (p) {
+        ultimoCambioRuta = Date.now();
+        var paradas = ruta.paradas.map(function (p) {
             return { lote: p.id, fecha: aTexto(p.fecha), cargada: textoCarga(p.carga) || aTexto(p.creada), encurso: textoCarga(p.encurso) };
-        }) })
+        });
+        // La copia del celular queda igual de una vez: al recargar no reaparecen los lotes quitados
+        ultimasRutas = (ultimasRutas || []).filter(function (r) { return r.cuadrilla !== ruta.cuad; }).concat(paradas.map(function (p, n) {
+            return { cuadrilla: ruta.cuad, lote: p.lote, fecha: p.fecha, orden: String(n + 1), cargada: p.cargada, encurso: p.encurso };
+        }));
+        guardarCache();
+        enviar('guardar_ruta', { cuadrilla: ruta.cuad, paradas: paradas })
             .catch(function (err) { toast('La pre-ruta quedó en este celular pero no en la hoja: ' + err.message); });
     }
     // desdeCache: copia guardada en el celular mientras llega la hoja; no sube nada a la hoja
