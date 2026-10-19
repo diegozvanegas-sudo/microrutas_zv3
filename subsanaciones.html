@@ -137,6 +137,19 @@
     .no-realizado { color: var(--pend); background: var(--pend-bg); }
     .tag-despues { font-size: 11px; font-weight: 700; color: var(--muted); background: #eef2f4; padding: 1px 7px; border-radius: 99px; }
     .tag-sig { font-size: 11px; font-weight: 700; color: #fff; background: var(--brand); padding: 1px 7px; border-radius: 99px; }
+    /* Lote que la cuadrilla está ejecutando ahora (mensaje "inicia labores...") */
+    .tag-curso { font-size: 11px; font-weight: 700; color: #fff; background: #2563eb; padding: 1px 7px; border-radius: 99px; }
+    .parada.encurso { background: #eff6ff; }
+    .parada.encurso .n { background: #2563eb; color: #fff; font-size: 11px; }
+    .tipo-ruta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .tipo-ruta input { position: absolute; opacity: 0; pointer-events: none; }
+    .tipo-ruta label { margin: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-size: 13px; color: var(--ink); text-align: center; }
+    .tipo-ruta label small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+    .tipo-ruta input:checked + label { border-color: var(--brand); background: #edf8f3; box-shadow: inset 0 0 0 1px var(--brand); }
+    .tipo-ruta #ruta-tipo-curso:checked + label { border-color: #2563eb; background: #eff6ff; box-shadow: inset 0 0 0 1px #2563eb; }
+    .tipo-ruta input:focus-visible + label { outline: 2px solid var(--brand); outline-offset: 2px; }
+    .tipo-ruta .ancho-tipo { grid-column: 1 / -1; }
+    .chip-ruta .curso { color: #1d4ed8; font-weight: 700; }
     .chip-ruta { display: inline-block; margin: 6px 6px 0 0; padding: 4px 9px; border-radius: 8px; background: #edf8f3; font-size: 13px; }
     .chip-ruta.aviso { background: #fff7ed; color: #9a3412; }
     #dlg-ruta { width: min(560px, calc(100% - 24px)); height: auto; margin: auto; border-radius: 14px; }
@@ -348,6 +361,11 @@
             <label>FECHA DE EJECUCIÓN <input type="date" id="ruta-fecha"></label>
             <label>CUADRILLA <input id="ruta-cuad" inputmode="numeric"></label>
         </div>
+        <div class="tipo-ruta" role="radiogroup" aria-label="Qué dice el mensaje">
+            <input type="radio" name="ruta-tipo" id="ruta-tipo-hecho" value="hecho" checked><label for="ruta-tipo-hecho">✓ Ejecutados<small>listos para revisar</small></label>
+            <input type="radio" name="ruta-tipo" id="ruta-tipo-curso" value="curso"><label for="ruta-tipo-curso">▶ En ejecución ahora<small>la cuadrilla está ahí</small></label>
+            <input type="radio" name="ruta-tipo" id="ruta-tipo-auto" value="auto"><label for="ruta-tipo-auto" class="ancho-tipo" hidden>Según el mensaje<small>unos ejecutados y otro en ejecución</small></label>
+        </div>
         <div id="ruta-vista" style="margin-top:10px"></div>
         <div class="pie">
             <button type="button" class="secundario" id="ruta-cancelar">Cancelar</button>
@@ -460,24 +478,47 @@
             $('btn-nuevo').disabled = true;
             return;
         }
-        $('tabla').innerHTML = '<div class="cargando">Cargando…</div>';
+        // Google tarda varios segundos en responder: mientras tanto se muestra lo último guardado en este celular
+        var copia = !cargado && leerCache();
+        if (copia) aplicarDatos(copia, true);
+        else if (!cargado) $('tabla').innerHTML = '<div class="cargando">Cargando…</div>';
+        var btn = $('btn-recargar');
+        btn.disabled = true;
+        btn.textContent = '↻ Actualizando…';
         leer().then(function (d) {
             aviso('');
-            items = d.items || [];
-            columnas = d.columnas || [];
-            registros = (d.registros || []).map(canonico);
-            ordenarRegistros();
-            llenarSelect('f-zona', 'ZONA', 'Zona: todas');
-            llenarSelect('f-cuadrilla', 'CUADRILLA', 'Cuadrilla: todas');
-            if (d.rutas) rutasDeHoja(d.rutas);
-            cargado = true;
-            pintar();
-            abrirDesdeUrl();
-            if (alCargar) { var f = alCargar; alCargar = null; f(); }
+            ultimasRutas = d.rutas || null;
+            aplicarDatos(d, false);
+            guardarCache();
         }).catch(function (err) {
+            if (cargado) return aviso('Se muestra lo guardado en este celular' + (copia && copia.t ? ' (' + new Date(copia.t).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) + ')' : '') +
+                '. No se pudo actualizar: ' + esc(err.message) + '. Pulse "↻ Actualizar" para reintentar.');
             aviso('<b>No se pudo leer la hoja:</b> ' + esc(err.message) + '. Revise que la aplicación web esté publicada con acceso "Cualquier usuario".', true);
             $('tabla').innerHTML = '<div class="vacio">No hay datos.</div>';
-        });
+        }).then(function () { btn.disabled = false; btn.textContent = '↻ Actualizar'; });
+    }
+    function aplicarDatos(d, desdeCache) {
+        items = d.items || [];
+        columnas = d.columnas || [];
+        registros = (d.registros || []).map(canonico);
+        ordenarRegistros();
+        llenarSelect('f-zona', 'ZONA', 'Zona: todas');
+        llenarSelect('f-cuadrilla', 'CUADRILLA', 'Cuadrilla: todas');
+        if (d.rutas) rutasDeHoja(d.rutas, desdeCache);
+        cargado = true;
+        pintar();
+        abrirDesdeUrl(!desdeCache);
+        if (alCargar) { var f = alCargar; alCargar = null; f(); }
+    }
+    // Copia de la hoja en este celular (también la usa el mapa rápido para "Ver detalles" al instante)
+    var CACHE = 'subsanaciones_cache', ultimasRutas = null;
+    function leerCache() {
+        try { var c = JSON.parse(localStorage.getItem(CACHE)); return c && c.registros ? c : null; } catch (e) { return null; }
+    }
+    function guardarCache() {
+        try {
+            localStorage.setItem(CACHE, JSON.stringify({ t: Date.now(), items: items, columnas: columnas, registros: registros, rutas: ultimasRutas || (leerCache() || {}).rutas || null }));
+        } catch (e) {}
     }
 
     function llenarSelect(id, campo, todos) {
@@ -580,6 +621,7 @@
         if (!confirm('¿Eliminar la visita ' + nombre + ' del ' + (r['FECHA DE LA VISITA'] || '—') + ' (' + id + ')?\nSe borrará la fila de la hoja.')) return Promise.resolve(false);
         return enviar('eliminar', { id: id }).then(function () {
             registros = registros.filter(function (x) { return x.ID !== id; });
+            guardarCache();
             delete abiertos[id];
             pintar();
             toast('Eliminado ' + id);
@@ -749,6 +791,7 @@
             var i = registros.findIndex(function (x) { return x.ID === nuevo.ID; });
             if (i === -1) registros.unshift(nuevo); else registros[i] = nuevo;
             ordenarRegistros();
+            guardarCache();
             dlg.close();
             llenarSelect('f-zona', 'ZONA', 'Zona: todas');
             llenarSelect('f-cuadrilla', 'CUADRILLA', 'Cuadrilla: todas');
@@ -925,13 +968,34 @@
 
     // Desde el mapa: subsanaciones.html?mr=Z2CC0067&lote=264
     var desdeUrlHecho = false;
-    function abrirDesdeUrl() {
+    // final = datos ya leídos de la hoja (no solo los guardados en el celular)
+    function abrirDesdeUrl(final) {
         if (desdeUrlHecho) return;
+        var q = new URLSearchParams(location.search), mr = q.get('mr') || '', lote = q.get('lote') || '', ver = q.get('ver') || '', sub = q.get('subsanar') || '';
+        var buscada = function (id) { return registros.filter(function (r) { return r.ID === id; })[0]; };
+        // Visita que aún no está en lo guardado en el celular: se espera a la hoja
+        if ((ver || sub) && !final && !buscada(ver || sub)) return;
         desdeUrlHecho = true;
-        var q = new URLSearchParams(location.search), mr = q.get('mr') || '', lote = q.get('lote') || '';
-        if (!mr && !lote) return;
+        if (!mr && !lote && !ver && !sub) return;
         // Se usa una sola vez: si el celular recarga la pestaña o vuelve a ella, muestra la lista y no el formulario
         try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+        // Desde el mapa: subsanaciones.html?subsanar=SUB-00042 abre esa visita con los ítems en NO pasados a SI
+        if (sub) {
+            var rs = buscada(sub);
+            if (!rs) return toast('No se encontró la visita ' + sub + '. Puede que la hayan eliminado.');
+            if (rs.ESTADO === 'PENDIENTE') return subsanar(rs);
+            toast('La visita ' + sub + ' ya está ' + rs.ESTADO + '.');
+            ver = sub;
+        }
+        // Desde la ficha del mapa: subsanaciones.html?ver=SUB-00042 muestra esa visita con los detalles abiertos
+        if (ver) {
+            if (!registros.some(function (r) { return r.ID === ver; })) return toast('No se encontró la visita ' + ver + '. Puede que la hayan eliminado.');
+            $('f-texto').value = ver;
+            abiertos[ver] = true;
+            pintar();
+            $('tabla').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return toast('Visita ' + ver + '. Borre la búsqueda para ver todas.');
+        }
         $('f-texto').value = mr || lote;
         pintar();
         // Si el lote está en los lotes a revisar, llega con los datos de esa parada (cuadrilla, fecha de ejecución)
@@ -947,36 +1011,76 @@
 
     // ---------- Pre-ruta: lotes que mandan a revisar (se guarda en este celular) ----------
     var CENTROS = window.centrosLotes || {};
-    // Una ruta por cuadrilla: { cuad, paradas: [{ id, fecha (ejecución), creada }] }
+    // Una ruta por cuadrilla: { cuad, paradas: [{ id, fecha (ejecución), creada (día), carga (aaaa-mm-ddTHH:MM:SS), encurso }] }
+    // encurso: desde cuándo la cuadrilla está trabajando en ese lote ("inicia labores en el lote ..."); aún no se revisa
     var rutas = [], posicion = null;
+    // Orden de cada pre-ruta en este celular: 'llegada' (como llegaron los mensajes) o cercanía (por defecto)
+    var modos;
+    try { modos = JSON.parse(localStorage.getItem('subsanaciones_modos')) || {}; } catch (e) { modos = {}; }
+    function porLlegada(ruta) { return modos[ruta.cuad || ''] === 'llegada'; }
+    function guardarModos() { try { localStorage.setItem('subsanaciones_modos', JSON.stringify(modos)); } catch (e) {} }
+    function marca(d) {
+        d = d || new Date();
+        var z = function (n) { return ('0' + n).slice(-2); };
+        return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()) + 'T' + z(d.getHours()) + ':' + z(d.getMinutes()) + ':' + z(d.getSeconds());
+    }
+    // aaaa-mm-ddTHH:MM:SS <-> dd/mm/aaaa HH:MM:SS (así queda en la columna CARGADA / EN CURSO de la hoja)
+    function textoCarga(c) {
+        var m = String(c || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2}(?::\d{2})?))?/);
+        return m ? m[3] + '/' + m[2] + '/' + m[1] + (m[4] ? ' ' + m[4] : '') : '';
+    }
+    function cargaDeTexto(s) {
+        var m = String(s || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+        if (!m) { var a = aInput(s); return a ? a + 'T00:00:00' : ''; }
+        var z = function (n) { return ('0' + (n || 0)).slice(-2); };
+        return m[3] + '-' + z(m[2]) + '-' + z(m[1]) + 'T' + z(m[4]) + ':' + z(m[5]) + ':' + z(m[6]);
+    }
+    // "07:48" si fue hoy, "18/10 07:48" si fue otro día; nada si no se sabe la hora
+    function horaCarga(c) {
+        c = String(c || '');
+        if (c.length < 16 || c.slice(11, 16) === '00:00') return '';
+        return (c.slice(0, 10) === hoy() ? '' : c.slice(8, 10) + '/' + c.slice(5, 7) + ' ') + c.slice(11, 16);
+    }
+    function claveCarga(p) { return p.carga || (p.creada ? p.creada + 'T00:00:00' : ''); }
     // modoHoja: el Apps Script ya tiene la pestaña "Rutas" y la pre-ruta se comparte entre celulares.
     // Sin eso (script viejo o sin conexión) se trabaja solo con la copia de este celular.
     var modoHoja = false;
     function guardarRutas() { try { localStorage.setItem('subsanaciones_rutas', JSON.stringify(rutas)); } catch (e) {} }
     function subirRuta(ruta) {
         if (!modoHoja) return;
-        enviar('guardar_ruta', { cuadrilla: ruta.cuad, paradas: ruta.paradas.map(function (p) { return { lote: p.id, fecha: aTexto(p.fecha), cargada: aTexto(p.creada) }; }) })
+        enviar('guardar_ruta', { cuadrilla: ruta.cuad, paradas: ruta.paradas.map(function (p) {
+            return { lote: p.id, fecha: aTexto(p.fecha), cargada: textoCarga(p.carga) || aTexto(p.creada), encurso: textoCarga(p.encurso) };
+        }) })
             .catch(function (err) { toast('La pre-ruta quedó en este celular pero no en la hoja: ' + err.message); });
     }
-    function rutasDeHoja(lista) {
+    // desdeCache: copia guardada en el celular mientras llega la hoja; no sube nada a la hoja
+    function rutasDeHoja(lista, desdeCache) {
         modoHoja = true;
         var locales = rutas;
         // La primera vez, lo que estaba solo en este celular se sube a la hoja (una sola vez, para no revivir rutas que otro quitó)
         var migrar = false;
-        try { migrar = !localStorage.getItem('subsanaciones_rutas_en_hoja'); localStorage.setItem('subsanaciones_rutas_en_hoja', '1'); } catch (e) {}
+        if (!desdeCache) try { migrar = !localStorage.getItem('subsanaciones_rutas_en_hoja'); localStorage.setItem('subsanaciones_rutas_en_hoja', '1'); } catch (e) {}
         rutas = [];
         lista.slice().sort(function (a, b) {
             return a.cuadrilla.localeCompare(b.cuadrilla, 'es', { numeric: true }) || (Number(a.orden) || 1e9) - (Number(b.orden) || 1e9);
         }).forEach(function (r) {
             var id = /^\d+$/.test(r.lote) ? String(+r.lote) : r.lote;
-            agregarParadas(r.cuadrilla, [{ id: id, fecha: aInput(r.fecha), creada: aInput(r.cargada) || hoy() }]);
+            var n = { id: id, fecha: aInput(r.fecha), creada: aInput(r.cargada) || hoy(), carga: cargaDeTexto(r.cargada) };
+            if (r.encurso !== undefined) n.encurso = cargaDeTexto(r.encurso);
+            agregarParadas(r.cuadrilla, [n]);
         });
+        // Un Apps Script sin actualizar no trae la columna EN CURSO: se usa la de este celular
+        var hojaConCurso = lista.some(function (r) { return r.encurso !== undefined; });
         // La hoja guarda el orden pero no la marca "para después": se conserva la de este celular
         locales.forEach(function (l) {
             var ruta = rutas.find(function (r) { return r.cuad === l.cuad; });
             if (ruta) l.paradas.forEach(function (p) {
-                var q = p.despues && ruta.paradas.find(function (x) { return x.id === p.id; });
-                if (q) q.despues = true;
+                var q = ruta.paradas.find(function (x) { return x.id === p.id; });
+                if (!q) return;
+                if (p.despues) q.despues = true;
+                if (!hojaConCurso && p.encurso) q.encurso = p.encurso;
+                // Filas viejas de la hoja solo tienen el día: se conserva la hora que sabe este celular
+                if (p.carga && p.carga.slice(0, 10) === claveCarga(q).slice(0, 10) && /T00:00:00$/.test(claveCarga(q))) q.carga = p.carga;
             });
         });
         if (migrar) locales.forEach(function (l) {
@@ -987,7 +1091,7 @@
         // Lotes escritos a mano en la hoja (sin ORDEN): se ordenan por cercanía y se guarda el orden
         var sinOrden = {};
         lista.forEach(function (r) { if (!r.orden) sinOrden[r.cuadrilla] = true; });
-        rutas.forEach(function (ruta) { if (sinOrden[ruta.cuad]) { ordenar(ruta, posicion); subirRuta(ruta); } });
+        if (!desdeCache) rutas.forEach(function (ruta) { if (sinOrden[ruta.cuad]) { ordenar(ruta, posicion); subirRuta(ruta); } });
         guardarRutas();
     }
     function agregarParadas(cuad, nuevas) {
@@ -995,7 +1099,10 @@
         if (!ruta) { ruta = { cuad: cuad, paradas: [] }; rutas.push(ruta); }
         nuevas.forEach(function (n) {
             var ya = ruta.paradas.find(function (p) { return p.id === n.id; });
-            if (ya) { ya.fecha = n.fecha || ya.fecha; ya.creada = n.creada; } else ruta.paradas.push(n);
+            if (ya) {
+                ya.fecha = n.fecha || ya.fecha; ya.creada = n.creada; ya.carga = n.carga || ya.carga;
+                if (n.encurso !== undefined) ya.encurso = n.encurso;
+            } else ruta.paradas.push(n);
         });
         // Cuadrillas en orden numérico; las sin cuadrilla al final
         rutas.sort(function (a, b) { return (a.cuad ? 0 : 1) - (b.cuad ? 0 : 1) || a.cuad.localeCompare(b.cuad, 'es', { numeric: true }); });
@@ -1003,18 +1110,33 @@
     }
 
     // "Lotes ejecutados el 14-10-2026 por la cuadrilla #2 \n 532 \n 371" -> fecha, cuadrilla y lotes
+    // "Buenos días Cuadrilla #4 inicia labores Lote de inicio Z2cc0339" -> tipo 'curso': la cuadrilla está trabajando ahí ahora
+    // "Terminó el lote 532, pasamos al 371": lo de antes de "pasamos" ya se ejecutó, lo de después está en ejecución
+    var RE_HECHO = /ejecutad|terminad|terminamos|termin[oó]|finaliz|culmin|realizad/i;
+    var RE_CURSO = /inici|empez|empiez|comenz|comienz|arranc|en ejecuci|ejecutando|trabajando|contin[uú]|seguimos|nos encontramos|pasamos|nos dirigimos|vamos/i;
     function parsearMensaje(texto) {
-        var t = String(texto || ''), fecha = '', cuad = '', m, lotes = [];
+        var t = String(texto || ''), fecha = '', cuad = '', m, lotes = [], enCurso = [];
         m = t.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})\b/);
         if (m) { fecha = (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2); t = t.replace(m[0], ' '); }
         m = t.match(/cuadrilla\s*(?:n[°º.o]*\s*)?#?\s*(\d+)/i);
         if (m) { cuad = m[1]; t = t.replace(m[0], ' '); }
-        (t.match(/\bZ\d+[A-Z]{2}\d{3,5}\b|\b\d{1,5}\b/gi) || []).forEach(function (v) {
-            v = v.toUpperCase();
+        var pc = t.search(RE_CURSO), ph = t.search(RE_HECHO);
+        // ¿El lote que está en la posición i del mensaje está en ejecución?
+        var esCurso = function (i) {
+            if (pc === -1) return false;
+            if (ph === -1) return true;
+            return ph < pc ? i > pc : i < ph;
+        };
+        var re = /\bZ\d+[A-Z]{2}\d{3,5}\b|\b\d{1,5}\b/gi;
+        while ((m = re.exec(t))) {
+            var v = m[0].toUpperCase();
             v = /^Z/.test(v) ? (LOTES[v] && LOTES[v].lote && LOTES[v].lote !== 'NA' ? LOTES[v].lote : v) : String(+v);
-            if (lotes.indexOf(v) === -1) lotes.push(v);
-        });
-        return { fecha: fecha, cuad: cuad, lotes: lotes };
+            if (lotes.indexOf(v) !== -1) continue;
+            lotes.push(v);
+            if (esCurso(m.index)) enCurso.push(v);
+        }
+        var tipo = !enCurso.length ? 'hecho' : enCurso.length === lotes.length ? 'curso' : 'mixto';
+        return { fecha: fecha, cuad: cuad, lotes: lotes, enCurso: enCurso, tipo: tipo };
     }
     // id = número de lote, o la microrruta cuando no tiene lote
     function infoLote(id) {
@@ -1059,11 +1181,16 @@
     function textoDist(m) { return m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
     function urlIr(c) { return 'https://www.google.com/maps/dir/?api=1&destination=' + c[0] + ',' + c[1] + '&travelmode=driving'; }
 
-    // Pendientes primero en el recorrido más corto; luego los dejados para después, los que no tienen ubicación y al final los ya revisados
+    // Pendientes primero (en el recorrido más corto, o como fueron llegando si la pre-ruta está "por llegada");
+    // luego los dejados para después, los sin ubicación, los que la cuadrilla aún está ejecutando y al final los ya revisados
     function ordenar(ruta, desde) {
-        var pend = [], despues = [], hechos = [], sinC = [];
-        ruta.paradas.forEach(function (p) { var x = infoLote(p.id); (visitaDe(p, x) ? hechos : p.despues ? despues : x.c ? pend : sinC).push(p); });
-        ruta.paradas = recorridoCorto(pend, desde).concat(despues, sinC, hechos);
+        var pend = [], despues = [], hechos = [], sinC = [], curso = [], llegada = porLlegada(ruta);
+        ruta.paradas.forEach(function (p) {
+            var x = infoLote(p.id);
+            (visitaDe(p, x) ? hechos : p.encurso ? curso : p.despues ? despues : x.c || llegada ? pend : sinC).push(p);
+        });
+        pend = llegada ? pend.slice().sort(function (a, b) { return claveCarga(a).localeCompare(claveCarga(b)); }) : recorridoCorto(pend, desde);
+        ruta.paradas = pend.concat(despues, sinC, curso, hechos);
     }
     // "Después": pasa la parada al final de las pendientes; "Hacer ahora": la vuelve la siguiente
     function aplazar(ruta, id, si) {
@@ -1129,11 +1256,15 @@
             return;
         }
         cont.innerHTML = rutas.map(function (ruta, ri) {
-            var paradas = ruta.paradas.map(function (p) { var x = infoLote(p.id); x.fecha = p.fecha; x.despues = p.despues; x.visita = visitaDe(p, x); return x; });
+            var paradas = ruta.paradas.map(function (p) {
+                var x = infoLote(p.id); x.fecha = p.fecha; x.despues = p.despues; x.carga = p.carga; x.visita = visitaDe(p, x); x.encurso = !x.visita && p.encurso; return x;
+            });
             var fechas = paradas.map(function (x) { return x.fecha; }).filter(function (f, i, a) { return f && a.indexOf(f) === i; }).sort();
             var hechas = paradas.filter(function (x) { return x.visita; }).length;
-            var pend = paradas.filter(function (x) { return !x.visita; }), sig = pend[0];
-            var proximas = pend.filter(function (x) { return x.c; }).slice(0, 4); // Google Maps en el celular admite 3 paradas + destino
+            // El lote que la cuadrilla está ejecutando no es "siguiente": aún no está listo para revisar
+            var pend = paradas.filter(function (x) { return !x.visita; }), listos = pend.filter(function (x) { return !x.encurso; }), sig = listos[0];
+            var llegada = porLlegada(ruta);
+            var proximas = listos.filter(function (x) { return x.c; }).slice(0, 4); // Google Maps en el celular admite 3 paradas + destino
             var gmaps = proximas.length ? 'https://www.google.com/maps/dir/?api=1&destination=' + proximas[proximas.length - 1].c.join(',') +
                 (proximas.length > 1 ? '&waypoints=' + encodeURIComponent(proximas.slice(0, -1).map(function (x) { return x.c.join(','); }).join('|')) : '') + '&travelmode=driving' : '';
             // "Ver todos en el mapa": el mapa pinta de otro color los ya revisados y los cerrados
@@ -1141,8 +1272,12 @@
             var idMapa = function (x) { return x.lote || x.mr; };
             var cerrada = function (x) { return x.visita && x.visita.ESTADO === 'CERRADO'; };
             var urlTodos = enMapa.length ? 'mapa_rapido.html?lote=' + enMapa.map(idMapa).join(',') +
-                '&hechos=' + enMapa.filter(function (x) { return x.visita && !cerrada(x); }).map(idMapa).join(',') +
-                '&cerrados=' + enMapa.filter(cerrada).map(idMapa).join(',') : '';
+                '&hechos=' + enMapa.filter(function (x) { return x.visita && !cerrada(x) && x.visita.ESTADO !== 'PENDIENTE'; }).map(idMapa).join(',') +
+                '&subsanar=' + enMapa.filter(function (x) { return x.visita && x.visita.ESTADO === 'PENDIENTE'; }).map(idMapa).join(',') +
+                '&cerrados=' + enMapa.filter(cerrada).map(idMapa).join(',') +
+                '&curso=' + enMapa.filter(function (x) { return x.encurso; }).map(idMapa).join(',') +
+                // lote:ID de la visita, para el botón "Ver detalles de la visita" en la ficha del mapa
+                '&visitas=' + enMapa.filter(function (x) { return x.visita; }).map(function (x) { return idMapa(x) + ':' + x.visita.ID; }).join(',') : '';
             var prev = posicion, prevUsted = !!posicion;
             var plegada = !!plegadas[ruta.cuad || ''];
             return '<div class="ruta-card' + (plegada ? ' plegada' : '') + '">' +
@@ -1150,11 +1285,15 @@
                     '<button type="button" class="ruta-plegar" data-ruta="plegar" data-ri="' + ri + '" aria-expanded="' + !plegada + '" aria-label="Plegar o desplegar">▾</button>' +
                     '<div data-ruta="plegar" data-ri="' + ri + '"><b>' + (ruta.cuad ? 'Cuadrilla ' + esc(ruta.cuad) : 'Pre-ruta') + '</b>' +
                     (fechas.length ? ' <span class="sub">· ejec. ' + esc(fechas.map(function (f) { return aTexto(f).slice(0, 5); }).join(', ')) + '</span>' : '') +
-                    '<div class="sub">' + (hechas === paradas.length ? '✓ Ruta completa · ' : '') + hechas + ' de ' + paradas.length + ' revisados</div></div>' +
+                    '<div class="sub">' + (hechas === paradas.length ? '✓ Ruta completa · ' : '') + hechas + ' de ' + paradas.length + ' revisados' +
+                        (llegada ? ' · 🕒 en orden de llegada' : '') + '</div></div>' +
                     '<button type="button" class="ruta-quitar" data-ruta="quitar" data-ri="' + ri + '" aria-label="Quitar pre-ruta">×</button></div>' +
                 '<div class="progreso"><span style="width:' + Math.round(100 * hechas / paradas.length) + '%"></span></div>' +
                 '<div class="ruta-acciones">' +
-                    (pend.length > 1 ? '<button type="button" class="secundario pequeno" data-ruta="ordenar" data-ri="' + ri + '">📍 Ordenar desde mi ubicación</button>' : '') +
+                    (pend.length > 1 ? (llegada
+                        ? '<button type="button" class="secundario pequeno" data-ruta="ordenar" data-ri="' + ri + '">📍 Ordenar por cercanía</button>'
+                        : '<button type="button" class="secundario pequeno" data-ruta="ordenar" data-ri="' + ri + '">📍 Ordenar desde mi ubicación</button>' +
+                          '<button type="button" class="secundario pequeno" data-ruta="llegada" data-ri="' + ri + '">🕒 Orden de llegada</button>') : '') +
                     (gmaps ? '<a class="boton primario pequeno" target="_blank" rel="noopener" href="' + esc(gmaps) + '">Ruta en Google Maps' + (pend.length > proximas.length ? ' (próximos ' + proximas.length + ')' : '') + '</a>' : '') +
                     (urlTodos ? '<a class="boton secundario pequeno" href="' + esc(urlTodos) + '">Ver todos en el mapa</a>' : '') +
                 '</div>' +
@@ -1165,11 +1304,14 @@
                     // Pendiente pero visitado hace poco (antes de esta pre-ruta): se avisa según la frecuencia
                     var rec = !x.visita && visitaReciente(x.mr, x.lote, null, hoy());
                     if (rec && rec.reciente) aviso = (aviso ? aviso + ' · ' : '') + 'Visitado ' + textoDias(rec.d) + (rec.frec ? ' (frecuencia ' + rec.frec.toLowerCase() + ')' : '');
-                    return '<li class="parada' + (x.visita ? ' hecha' : x === sig ? ' siguiente' : '') + '">' +
-                        '<span class="n">' + (x.visita ? (cerrada(x) ? '🔒' : '✓') : i + 1) + '</span>' +
+                    var llego = !x.visita && horaCarga(x.carga);
+                    return '<li class="parada' + (x.visita ? ' hecha' : x.encurso ? ' encurso' : x === sig ? ' siguiente' : '') + '">' +
+                        '<span class="n">' + (x.visita ? (cerrada(x) ? '🔒' : '✓') : x.encurso ? '▶' : i + 1) + '</span>' +
                         '<div class="info"><div class="titulo"><b>' + esc(x.lote ? 'Lote ' + x.lote : x.mr) + '</b>' +
                             (x.lote && x.mr ? ' <span class="sub">' + esc(x.mr) + '</span>' : '') +
                             (fechas.length > 1 && x.fecha ? ' <span class="sub">· ejec. ' + esc(aTexto(x.fecha).slice(0, 5)) + '</span>' : '') +
+                            (llego && !x.encurso ? ' <span class="sub">· 🕒 ' + esc(llego) + '</span>' : '') +
+                            (x.encurso ? ' <span class="tag-curso">▶ Cuadrilla trabajando aquí' + (horaCarga(x.encurso) ? ' · desde ' + esc(horaCarga(x.encurso)) : '') + '</span>' : '') +
                             (x === sig ? ' <span class="tag-sig">Siguiente</span>' : '') +
                             (x.despues && !x.visita ? ' <span class="tag-despues">Para después</span>' : '') + (x.visita ? ' ' + badge(x.visita.ESTADO) : '') + '</div>' +
                             (x.d ? '<div class="sub dir">' + esc(x.d) + '</div>' : '') +
@@ -1180,7 +1322,8 @@
                                       : '<button type="button" class="primario pequeno" data-ruta="registrar" data-ri="' + ri + '" data-id="' + esc(x.id) + '">Registrar</button>') +
                             (x.c && !x.visita ? '<a class="boton secundario pequeno" target="_blank" rel="noopener" href="' + esc(urlIr(x.c)) + '">Cómo llegar</a>' : '') +
                             (x.mr || x.lote ? '<a class="boton secundario pequeno" href="' + esc(urlMapa(x.mr, x.lote)) + '">Mapa</a>' : '') +
-                            (x.visita || pend.length < 2 ? '' : x.despues
+                            (x.encurso ? '<button type="button" class="secundario pequeno" data-ruta="termino" data-ri="' + ri + '" data-id="' + esc(x.id) + '">✓ Ya terminó</button>' : '') +
+                            (x.visita || x.encurso || pend.length < 2 ? '' : x.despues
                                 ? '<button type="button" class="secundario pequeno" data-ruta="ahora" data-ri="' + ri + '" data-id="' + esc(x.id) + '">Hacer ahora</button>'
                                 : '<button type="button" class="secundario pequeno" data-ruta="despues" data-ri="' + ri + '" data-id="' + esc(x.id) + '">⤓ Después</button>') +
                         '</div></li>';
@@ -1212,7 +1355,20 @@
             toast('Cargando la hoja… el formulario se abre en un momento.');
             return;
         }
+        if (accion === 'llegada') {
+            modos[ruta.cuad || ''] = 'llegada'; guardarModos();
+            ordenar(ruta, posicion); guardarRutas(); subirRuta(ruta); pintarRutas();
+            return toast('Ordenada como fueron llegando los lotes. El mapa los numera en el mismo orden.');
+        }
+        // La cuadrilla terminó el lote que estaba ejecutando: queda listo para revisar
+        if (accion === 'termino') {
+            var pt = ruta.paradas.find(function (p) { return p.id === b.dataset.id; });
+            if (pt) { if (!pt.fecha && pt.encurso) pt.fecha = pt.encurso.slice(0, 10); pt.encurso = ''; }
+            ordenar(ruta, posicion); guardarRutas(); subirRuta(ruta); pintarRutas();
+            return toast('Lote ' + b.dataset.id + ' listo para revisar.');
+        }
         if (accion === 'ordenar') {
+            delete modos[ruta.cuad || '']; guardarModos();
             var listo = function (desde) { ordenar(ruta, desde); guardarRutas(); subirRuta(ruta); pintarRutas(); };
             if (!navigator.geolocation) return listo(null);
             b.disabled = true; b.textContent = 'Ubicando…';
@@ -1258,25 +1414,36 @@
 
     function abrirDlgRuta() {
         ['ruta-texto', 'ruta-fecha', 'ruta-cuad'].forEach(function (id) { $(id).value = ''; });
+        $('ruta-tipo-hecho').checked = true;
+        document.querySelector('[for="ruta-tipo-auto"]').hidden = true;
         vistaRuta();
         $('dlg-ruta').showModal();
     }
+    // Lotes que quedan "en ejecución ahora" según la opción elegida en el diálogo
+    function lotesEnCurso(p) { return $('ruta-tipo-curso').checked ? p.lotes : $('ruta-tipo-auto').checked ? p.enCurso : []; }
     function vistaRuta() {
-        var p = parsearMensaje($('ruta-texto').value), cuad = $('ruta-cuad').value.trim().replace(/^C/i, '');
+        var p = parsearMensaje($('ruta-texto').value), cuad = $('ruta-cuad').value.trim().replace(/^C/i, ''), curso = lotesEnCurso(p);
         $('ruta-vista').innerHTML = p.lotes.length ? '<div class="sub">' + p.lotes.length + ' lote' + (p.lotes.length === 1 ? '' : 's') + ' encontrado' + (p.lotes.length === 1 ? '' : 's') + ':</div>' +
             p.lotes.map(function (id) {
                 var x = infoLote(id), aviso = !x.mr ? 'no está en la programación' : cuad && x.cuad && x.cuad !== cuad ? 'es de la cuadrilla ' + x.cuad : '';
-                return '<span class="chip-ruta' + (aviso ? ' aviso' : '') + '">' + esc(x.lote || x.mr) + (x.lote && x.mr ? ' · ' + esc(x.mr) : '') + (aviso ? ' ⚠ ' + esc(aviso) : '') + '</span>';
-            }).join('') : '<div class="sub">Se toman del mensaje la fecha, la cuadrilla y los números de lote (o códigos de microrruta).</div>';
+                return '<span class="chip-ruta' + (aviso ? ' aviso' : '') + '">' + (curso.indexOf(id) !== -1 ? '<span class="curso">▶ </span>' : '') +
+                    esc(x.lote || x.mr) + (x.lote && x.mr ? ' · ' + esc(x.mr) : '') + (aviso ? ' ⚠ ' + esc(aviso) : '') + '</span>';
+            }).join('') + (curso.length ? '<div class="sub" style="margin-top:6px"><span class="curso" style="color:#1d4ed8">▶</span> = <b>en ejecución ahora</b>' +
+                (cuad ? ' por la cuadrilla ' + esc(cuad) : '') + '. El lote donde estaba antes esa cuadrilla queda listo para revisar.</div>' : '')
+            : '<div class="sub">Se toman del mensaje la fecha, la cuadrilla y los números de lote (o códigos de microrruta).</div>';
         $('ruta-crear').disabled = !p.lotes.length;
+        $('ruta-crear').textContent = curso.length && curso.length === p.lotes.length ? 'Marcar en ejecución' : 'Crear pre-ruta';
     }
     $('ruta-texto').addEventListener('input', function () {
         var p = parsearMensaje(this.value);
         if (p.fecha) $('ruta-fecha').value = p.fecha;
         if (p.cuad) $('ruta-cuad').value = p.cuad;
+        document.querySelector('[for="ruta-tipo-auto"]').hidden = p.tipo !== 'mixto';
+        $(p.tipo === 'curso' ? 'ruta-tipo-curso' : p.tipo === 'mixto' ? 'ruta-tipo-auto' : 'ruta-tipo-hecho').checked = true;
         vistaRuta();
     });
     $('ruta-cuad').addEventListener('input', vistaRuta);
+    document.querySelectorAll('[name="ruta-tipo"]').forEach(function (r) { r.addEventListener('change', vistaRuta); });
     $('ruta-pegar').onclick = function () {
         if (!navigator.clipboard || !navigator.clipboard.readText) { $('ruta-texto').focus(); return toast('Mantenga presionado el cuadro y elija Pegar.'); }
         navigator.clipboard.readText().then(function (t) {
@@ -1290,14 +1457,26 @@
         if (!p.lotes.length) return;
         var cuad = $('ruta-cuad').value.trim().replace(/^C/i, ''), fecha = $('ruta-fecha').value;
         var existia = rutas.some(function (r) { return r.cuad === cuad; });
-        var ruta = agregarParadas(cuad, p.lotes.map(function (id) { return { id: id, fecha: fecha, creada: hoy() }; }));
+        var cursoIds = lotesEnCurso(p), curso = cursoIds.length > 0, ahora = new Date(), enCurso = marca(ahora);
+        // La cuadrilla pasó a otro lote: el que estaba ejecutando ya terminó y queda listo para revisar
+        if (curso) rutas.forEach(function (r) {
+            if (r.cuad === cuad) r.paradas.forEach(function (q) {
+                if (q.encurso && cursoIds.indexOf(q.id) === -1) { if (!q.fecha) q.fecha = q.encurso.slice(0, 10); q.encurso = ''; }
+            });
+        });
+        // Un segundo de diferencia por lote: así "orden de llegada" respeta el orden en que venían en el mensaje
+        var ruta = agregarParadas(cuad, p.lotes.map(function (id, i) {
+            return { id: id, fecha: fecha || (curso ? hoy() : ''), creada: hoy(), carga: marca(new Date(ahora.getTime() + i * 1000)),
+                     encurso: cursoIds.indexOf(id) !== -1 ? enCurso : '' };
+        }));
         ordenar(ruta, posicion);
         guardarRutas();
         subirRuta(ruta);
         $('dlg-ruta').close();
         plegar(ruta.cuad, false);
         pintarRutas();
-        toast((existia ? 'Se sumaron a la cuadrilla ' + cuad + ' y se reordenó la ruta' : 'Pre-ruta creada y ordenada') + ' · ' + ruta.paradas.length + ' lotes.');
+        toast(curso ? 'Cuadrilla ' + (cuad || '') + ' trabajando ahora en ' + cursoIds.join(', ') + '.'
+            : (existia ? 'Se sumaron a la cuadrilla ' + cuad + ' y se reordenó la ruta' : 'Pre-ruta creada y ordenada') + ' · ' + ruta.paradas.length + ' lotes.');
         var tarjeta = $('ruta').querySelectorAll('.ruta-card')[rutas.indexOf(ruta)];
         if (tarjeta) tarjeta.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };

@@ -42,6 +42,12 @@
     .parada-num.pendiente { background: #dc2626; }
     .parada-num.hecho { background: #16a34a; }
     .parada-num.cerrado { background: #64748b; font-size: 12px; }
+    .parada-num.subsanar { background: #ea580c; }
+    .parada-num.curso { background: #2563eb; font-size: 11px; }
+    .ruta-estado.curso { color: #1e40af; background: #dbeafe; }
+    .ruta-estado.subsanar { color: #9a3412; background: #ffedd5; }
+    .ficha-lote .acciones a.subsanar-btn { color: #fff; background: #15803d; }
+    .ficha-lote .acciones a.subsanar-btn:hover { color: #fff; background: #166534; }
     #leyenda { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; font-weight: 600; }
     #leyenda span { display: inline-flex; align-items: center; gap: 5px; }
     #leyenda i { width: 12px; height: 12px; border-radius: 3px; border: 2px solid; }
@@ -49,6 +55,18 @@
     .ruta-estado.pendiente { color: #b91c1c; background: #fee2e2; }
     .ruta-estado.hecho { color: #15803d; background: #dcfce7; }
     .ruta-estado.cerrado { color: #334155; background: #e2e8f0; }
+    .ficha-lote .linea-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 6px; }
+    .ficha-lote .linea-estado .ruta-estado { margin-top: 0; }
+    /* Leaflet pinta de azul los enlaces del mapa: se fija el color del botón */
+    .ficha-lote a.ver-visita { display: inline-block; padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; text-decoration: none;
+                               color: #fff; background: var(--brand); }
+    .ficha-lote a.ver-visita:hover { color: #fff; background: var(--brand-dark); }
+    .ficha-lote .visita-det { margin: 10px 0; padding: 10px 12px; border-radius: 10px; background: #f2fbf7; border-left: 3px solid var(--brand); }
+    .ficha-lote .visita-det .datos { margin: 0 0 8px; }
+    .ficha-lote .visita-det .dato { background: #fff; }
+    .ficha-lote .chip-no { display: inline-block; margin: 3px 4px 0 0; padding: 2px 8px; border-radius: 6px; font-size: 12px; color: #b91c1c; background: #fee2e2; }
+    .ficha-lote .visita-det .copia { font-size: 11px; color: var(--muted); margin-top: 6px; }
+    .ficha-lote .visita-det a.editar-visita { display: block; text-align: center; margin-top: 8px; padding: 9px; color: var(--brand); background: #fff; border: 1px solid #9fd3bd; }
     .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; z-index: 2000; display: none; max-width: calc(100% - 32px); }
     /* Ficha del lote: ventana en computador, panel desde abajo en el celular */
     .ficha-lote { font-size: 14px; line-height: 1.35; color: var(--ink); }
@@ -165,12 +183,16 @@
     var ESTILO_RUTA = {
         pendiente: { color: '#991b1b', weight: 3, fillColor: '#ef4444', fillOpacity: .7 },
         hecho: { color: '#14532d', weight: 3, fillColor: '#22c55e', fillOpacity: .7 },
+        subsanar: { color: '#9a3412', weight: 3, fillColor: '#f59e0b', fillOpacity: .75 },
+        curso: { color: '#1e3a8a', weight: 3, fillColor: '#3b82f6', fillOpacity: .75 },
         cerrado: { color: '#334155', weight: 3, fillColor: '#94a3b8', fillOpacity: .7, dashArray: '6 4' }
     };
-    var TEXTO_RUTA = { pendiente: 'Pendiente de revisar', hecho: '✓ Ya revisado', cerrado: '🔒 Lote cerrado' };
+    var TEXTO_RUTA = { pendiente: 'Falta revisar', hecho: '✓ Ya revisado', subsanar: '⚠ Revisado · falta subsanar', cerrado: '🔒 Lote cerrado', curso: '▶ Cuadrilla trabajando aquí ahora' };
+    // Estado de la visita (hoja) -> color del lote en la pre-ruta
+    function estadoDeVisita(e) { return e === 'PENDIENTE' ? 'subsanar' : e === 'CERRADO' ? 'cerrado' : 'hecho'; }
     function estiloBase(c) { return c.rutaEstado ? ESTILO_RUTA[c.rutaEstado] : estiloLote(c.lote.c); }
 
-    var grupos = {}, porLote = {}, porMr = {}, esperando = {}, resaltados = [], enRuta = [], estadoRuta = null;
+    var grupos = {}, porLote = {}, porMr = {}, esperando = {}, resaltados = [], enRuta = [], estadoRuta = null, visitaRuta = {};
     // Los archivos data/rapido/*.js llaman a estas funciones al cargarse
     window.cargarLotes = function (c, datos) {
         var g = L.featureGroup(), t = datos.t;
@@ -249,16 +271,18 @@
         var dato = function (t, v) { return v ? '<div class="dato"><span class="et">' + t + '</span><b>' + esc(v) + '</b></div>' : ''; };
         var area = Number(String(p.a || '').replace(',', '.'));
         var pt = puntoLote(capa), ll = pt.lat.toFixed(6) + ',' + pt.lng.toFixed(6);
+        var u = visitaDeCapa(capa);
         return '<div class="ficha-lote">' +
             '<div class="cab"><span class="titulo">' + (lote ? 'Lote ' + esc(lote) : esc(p.m || 'Lote')) + '</span>' +
                 (p.c ? '<span class="cuad" style="background:' + colorCuadrilla(p.c) + '">Cuadrilla ' + esc(p.c) + '</span>' : '') + '</div>' +
             '<div class="mr">' + [lote ? p.m : '', zona ? 'Zona ' + zona : ''].filter(Boolean).map(esc).join(' · ') + '</div>' +
-            (capa.rutaEstado ? '<span class="ruta-estado ' + capa.rutaEstado + '">' + TEXTO_RUTA[capa.rutaEstado] + '</span>' : '') +
+            lineaEstado(capa) +
             '<div class="datos">' + dato('Comuna', p.k) + dato('Área', p.a ? (area ? area.toLocaleString('es-CO') : p.a) + ' m²' : '') + dato('Frecuencia', p.f) + '</div>' +
             (p.d ? '<div class="bloque"><span class="et">Dirección</span>' + esc(p.d) + '</div>' : '') +
             (p.s ? '<div class="bloque"><span class="et">Descripción</span><div class="desc" data-desc>' + esc(p.s) + '</div>' +
                 (p.s.length > 140 ? '<span class="mas" data-desc-mas>Ver todo ▾</span>' : '') + '</div>' : '') +
             '<div class="acciones">' +
+                (u && u.ESTADO === 'PENDIENTE' ? '<a class="boton subsanar-btn subs" href="subsanaciones.html?subsanar=' + encodeURIComponent(u.ID) + '">✓ Marcar subsanado</a>' : '') +
                 '<a class="boton primario" href="https://www.google.com/maps/dir/?api=1&destination=' + ll + '" target="_blank" rel="noopener">🧭 Cómo llegar</a>' +
                 '<a class="boton secundario" href="https://waze.com/ul?ll=' + ll + '&navigate=yes" target="_blank" rel="noopener">Waze</a>' +
                 '<a class="boton secundario subs" href="subsanaciones.html?mr=' + encodeURIComponent(p.m || '') + '&lote=' + encodeURIComponent(lote) + '">📋 Registrar subsanación</a>' +
@@ -290,6 +314,67 @@
         var abierta = d.classList.toggle('abierta');
         if (mas) mas.textContent = abierta ? 'Ver menos ▴' : 'Ver todo ▾';
     });
+    // ---------- Detalles de la visita sin salir del mapa ----------
+    // subsanaciones.html guarda en el celular la última copia de la hoja: se lee de ahí al instante.
+    // Si la visita no está en esa copia, el enlace abre subsanaciones como antes.
+    var copiaSubs = null;
+    function copia() {
+        if (copiaSubs == null) try { copiaSubs = JSON.parse(localStorage.getItem('subsanaciones_cache')) || false; } catch (e) { copiaSubs = false; }
+        return copiaSubs;
+    }
+    // Al volver con "atrás" desde subsanaciones (p. ej. tras marcar subsanado) se relee la copia y se repintan los colores
+    window.addEventListener('pageshow', function (e) { copiaSubs = null; if (e.persisted && estadoRuta) location.reload(); });
+    function visitaGuardada(id) {
+        var c = copia(), r = c && (c.registros || []).filter(function (x) { return x.ID === id; })[0];
+        return r ? { r: r, items: c.items || [], t: c.t } : null;
+    }
+    // La de la pre-ruta si la hay; si no, la visita más reciente del lote en la copia (ya viene ordenada)
+    function visitaDeCapa(capa) {
+        if (capa.rutaVisita) { var v = visitaGuardada(capa.rutaVisita); return v ? v.r : null; }
+        var c = copia(), p = capa.lote, lote = p.l && p.l !== 'NA' ? String(p.l) : '', mr = String(p.m || '').toUpperCase();
+        if (!c) return null;
+        return (c.registros || []).filter(function (r) {
+            return lote ? String(r.LOTE || '').trim() === lote : mr && String(r.MICRORRUTA || '').trim().toUpperCase() === mr;
+        })[0] || null;
+    }
+    function lineaEstado(capa) {
+        var u = visitaDeCapa(capa), id = capa.rutaVisita || (u && u.ID), html = '';
+        if (capa.rutaEstado) html += '<span class="ruta-estado ' + capa.rutaEstado + '">' + TEXTO_RUTA[capa.rutaEstado] + '</span>';
+        // Visita anterior a la pre-ruta (o búsqueda normal): se dice cuándo fue y cómo quedó
+        if (u && !capa.rutaVisita) html += '<span class="ruta-estado ' + estadoDeVisita(u.ESTADO) + '">Última visita ' + esc(String(u['FECHA DE LA VISITA'] || '').slice(0, 5)) + ' · ' + esc(u.ESTADO || '') + '</span>';
+        if (id) html += '<a class="ver-visita" data-visita="' + esc(id) + '" href="subsanaciones.html?ver=' + encodeURIComponent(id) + '">📄 Ver detalles ›</a>';
+        return html ? '<div class="linea-estado">' + html + '</div>' : '';
+    }
+    function normTxt(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase(); }
+    function detalleVisita(v) {
+        var r = v.r, enNo = v.items.filter(function (i) { return normTxt(r[i]).replace(/[.\s]/g, '') === 'NO'; });
+        var dato = function (t, x) { return x ? '<div class="dato"><span class="et">' + t + '</span><b>' + esc(x) + '</b></div>' : ''; };
+        var bloque = function (t, html) { return html ? '<div class="bloque"><span class="et">' + t + '</span>' + html + '</div>' : ''; };
+        return '<div class="visita-det">' +
+            '<div class="datos">' + dato('Visita', r['FECHA DE LA VISITA']) + dato('Estado', r.ESTADO) + dato('Interventor', r.INTERVENTOR) + dato('Ejecución', r['FECHA DE EJECUCIÓN']) + '</div>' +
+            bloque('Ítems en NO', enNo.length ? enNo.map(function (i) { return '<span class="chip-no">' + esc(i) + '</span>'; }).join('') : 'Ninguno') +
+            bloque('Observaciones', esc(r['OBSERVACIONES NOVEDADES'])) +
+            bloque('Subsanación', esc([r['FECHA SUBSANACIÓN'], r['OBSERVACIÓN SUBSANACIÓN']].filter(Boolean).join(' · '))) +
+            bloque('Evidencia', /^https?:\/\//i.test(r.EVIDENCIA || '') ? '<a href="' + esc(r.EVIDENCIA) + '" target="_blank" rel="noopener">Abrir fotos</a>' : esc(r.EVIDENCIA)) +
+            '<a class="boton editar-visita" href="subsanaciones.html?ver=' + encodeURIComponent(r.ID) + '">✏️ Editar en subsanaciones</a>' +
+            (v.t ? '<div class="copia">' + esc(r.ID) + ' · datos de este celular del ' + new Date(v.t).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) + '</div>' : '') +
+            '</div>';
+    }
+    // Fase de captura: Leaflet frena los clics dentro de su ventana antes de que lleguen al documento
+    document.addEventListener('click', function (ev) {
+        var a = ev.target.closest('[data-visita]');
+        if (!a) return;
+        var v = visitaGuardada(a.dataset.visita);
+        if (!v) return; // no está en la copia: abre subsanaciones
+        ev.preventDefault();
+        var ficha = a.closest('.ficha-lote'), det = ficha.querySelector('.visita-det');
+        if (det) { det.remove(); a.textContent = '📄 Ver detalles ›'; }
+        else { a.closest('.linea-estado').insertAdjacentHTML('afterend', detalleVisita(v)); a.textContent = 'Ocultar ▴'; }
+        // La ventana del computador se reacomoda al nuevo tamaño (sin volver a pintar el contenido)
+        var p = map._popup;
+        if (p && map.hasLayer(p)) try { p._updateLayout(); p._updatePosition(); } catch (e) {}
+    }, true);
+
     function limpiarResaltado() {
         resaltados.forEach(function (c) { c.setStyle(estiloBase(c)); });
         resaltados = [];
@@ -387,23 +472,26 @@
         var pendientes = claves.length;
         claves.forEach(function (k) { asegurarCuadrilla(k.cuad, function () { if (--pendientes === 0) listo(); }); });
         function listo() {
-            var capas = [], cuenta = { pendiente: 0, hecho: 0, cerrado: 0 };
+            var capas = [], cuenta = { pendiente: 0, hecho: 0, subsanar: 0, cerrado: 0, curso: 0 };
             marcadores.clearLayers();
             limpiarResaltado();
-            enRuta.forEach(function (c) { delete c.rutaEstado; c.setStyle(estiloLote(c.lote.c)); });
+            enRuta.forEach(function (c) { delete c.rutaEstado; delete c.rutaVisita; c.setStyle(estiloLote(c.lote.c)); });
             enRuta = [];
             claves.forEach(function (k) {
                 var cs = (k.esMr ? porMr : porLote)[k.v] || [];
                 capas = capas.concat(cs);
                 var est = estadoRuta && cs.length ? estadoRuta[k.v] || 'pendiente' : '';
+                // La copia guardada manda sobre el enlace: un lote marcado subsanado después ya sale en verde
+                var rv = est && visitaRuta[k.v] && visitaGuardada(visitaRuta[k.v]);
+                if (rv) est = estadoDeVisita(rv.r.ESTADO);
                 if (est) {
                     cuenta[est]++;
-                    cs.forEach(function (c) { c.rutaEstado = est; c.setStyle(ESTILO_RUTA[est]); enRuta.push(c); });
+                    cs.forEach(function (c) { c.rutaEstado = est; c.rutaVisita = visitaRuta[k.v] || ''; c.setStyle(ESTILO_RUTA[est]); enRuta.push(c); });
                     // Los pendientes encima, para que no los tape un lote vecino ya revisado
                     if (est === 'pendiente') cs.forEach(function (c) { c.bringToFront(); });
                 }
                 if (claves.length > 1 && cs.length) {
-                    var html = est === 'hecho' ? '✓' : est === 'cerrado' ? '🔒' : String(k.n);
+                    var html = est === 'hecho' ? '✓' : est === 'cerrado' ? '🔒' : est === 'subsanar' ? '!' : est === 'curso' ? '▶' : String(k.n);
                     L.marker(puntoLote(cs[0]), { icon: L.divIcon({ className: 'parada-num' + (est ? ' ' + est : ''), html: html }),
                         title: (k.esMr ? '' : 'Lote ') + k.v + (est ? ' · ' + TEXTO_RUTA[est] : ''), zIndexOffset: est === 'pendiente' ? 1000 : 0 })
                         .on('click', function () { verLote(cs[0]); }).addTo(marcadores);
@@ -421,8 +509,9 @@
     function pintarLeyenda(cuenta) {
         $('leyenda').hidden = !cuenta;
         if (!cuenta) return;
-        var tipos = [['pendiente', 'pendiente', 'pendientes'], ['hecho', 'revisado', 'revisados'], ['cerrado', 'cerrado', 'cerrados']];
-        $('leyenda').innerHTML = tipos.filter(function (t) { return cuenta[t[0]] || t[0] !== 'cerrado'; }).map(function (t) {
+        var tipos = [['pendiente', 'por revisar', 'por revisar'], ['curso', 'en ejecución', 'en ejecución'], ['hecho', 'revisado', 'revisados'],
+                     ['subsanar', 'por subsanar', 'por subsanar'], ['cerrado', 'cerrado', 'cerrados']];
+        $('leyenda').innerHTML = tipos.filter(function (t) { return cuenta[t[0]] || t[0] === 'pendiente' || t[0] === 'hecho'; }).map(function (t) {
             var e = ESTILO_RUTA[t[0]], n = cuenta[t[0]];
             return '<span><i style="background:' + e.fillColor + ';border-color:' + e.color + '"></i>' + n + ' ' + (n === 1 ? t[1] : t[2]) + '</span>';
         }).join('');
@@ -543,8 +632,13 @@
     var q = new URLSearchParams(location.search);
     if (q.has('hechos') || q.has('cerrados')) {
         estadoRuta = {};
-        [['hechos', 'hecho'], ['cerrados', 'cerrado']].forEach(function (t) {
+        [['hechos', 'hecho'], ['subsanar', 'subsanar'], ['cerrados', 'cerrado'], ['curso', 'curso']].forEach(function (t) {
             (q.get(t[0]) || '').split(',').map(clave).filter(Boolean).forEach(function (v) { estadoRuta[v] = t[1]; });
+        });
+        // &visitas=363:SUB-00042,371:SUB-00045
+        (q.get('visitas') || '').split(',').forEach(function (par) {
+            var i = par.lastIndexOf(':');
+            if (i > 0) visitaRuta[clave(par.slice(0, i))] = par.slice(i + 1).trim();
         });
     }
     $('btn-completo').href = 'index.html' + location.search; // el mapa completo también entiende ?lote= y ?mr=

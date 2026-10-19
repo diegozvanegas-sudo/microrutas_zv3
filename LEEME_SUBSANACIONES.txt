@@ -23,6 +23,12 @@ Qué hace
 - "Registrar subsanación" desde el mapa: si el lote está en una pre-ruta, el formulario llega con la
   cuadrilla y la fecha de ejecución de esa parada.
 - Cada visita tiene "🗑 Eliminar" en Ver detalles (pide confirmación).
+- Mensajes como "Cuadrilla #4 inicia labores Lote de inicio Z2CC0339" marcan ese lote como EN EJECUCIÓN AHORA
+  (azul, ▶): no se propone como siguiente hasta que la cuadrilla pase a otro lote o se toque "✓ Ya terminó".
+  "Terminó el lote 532, pasamos al 371" deja el 532 listo para revisar y el 371 en ejecución.
+- Cada lote guarda la hora en que llegó (columna CARGADA). "🕒 Orden de llegada" ordena la pre-ruta así,
+  y "Ver todos en el mapa" numera los lotes en ese mismo orden. "📍 Ordenar por cercanía" vuelve al recorrido corto.
+  La columna EN CURSO de la pestaña "Rutas" requiere actualizar el Apps Script (nueva versión).
 - Ubicar un lote por coordenadas: en el buscador del mapa rápido (o en "Ir al mapa") escriba o pegue
   6.2751N 75.5737W, 6.2751, -75.5737 o un link de Google Maps. El botón 📷 lee la foto: primero el GPS
   guardado en ella y, si no lo tiene (WhatsApp lo borra), el texto de la marca de agua.
