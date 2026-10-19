@@ -969,6 +969,23 @@ updateDynamicFilters();
             }
         });
     });
+    // Lotes que no están en la capa con su número (p. ej. 287): se buscan por la microrruta que les da la programación
+    if(tipos.indexOf('lote') !== -1 && window.direccionesLotes) {
+        var hallados = capasEncontradas.map(function(layer){ return String(layer.feature.properties.No_Lote || '').trim().toLowerCase(); });
+        var mrs = [];
+        valores.forEach(function(valor){
+            if(hallados.indexOf(valor) !== -1) return;
+            Object.keys(direccionesLotes).forEach(function(mr){
+                if(String(direccionesLotes[mr].lote || '').trim().toLowerCase() === valor) mrs.push(mr.toLowerCase());
+            });
+        });
+        if(mrs.length) layer_zonasverdes__areas_zonas_verdes_2.eachLayer(function(layer){
+            if(mrs.indexOf(String(layer.feature.properties.Microruta || '').trim().toLowerCase()) === -1 || capasEncontradas.indexOf(layer) !== -1) return;
+            layer.setStyle({color:'#d92d20', weight:3, fillColor:'#facc15', fillOpacity:0.75});
+            capasEncontradas.push(layer);
+            if(lotesSeleccionados.indexOf(layer.feature) === -1) lotesSeleccionados.push(layer.feature);
+        });
+    }
     if(capasEncontradas.length) {
         var grupo = new L.featureGroup(capasEncontradas);
         map.fitBounds(grupo.getBounds(), {padding: [20, 20], maxZoom: 18});
