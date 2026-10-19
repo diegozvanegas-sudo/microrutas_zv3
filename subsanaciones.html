@@ -378,6 +378,7 @@
 <script src="js/subsanaciones_config.js"></script>
 <script src="data/direcciones_lotes.js"></script>
 <script src="data/centros_lotes.js"></script>
+<script src="data/puntos_lotes.js"></script>
 <script src="js/coordenadas.js"></script>
 <script>
 (function () {
@@ -1178,6 +1179,15 @@
         var h = Math.pow(Math.sin(dLat / 2), 2) + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.pow(Math.sin(dLon / 2), 2);
         return 2 * 6371e3 * Math.asin(Math.sqrt(h));
     }
+    // Distancia entre dos lotes = la de sus partes más cercanas (puntos repartidos por los lotes largos;
+    // los demás usan su centro). desde puede ser [lat, lon] (su ubicación) o un id de lote.
+    var PUNTOS = window.puntosLotes || {};
+    function puntosDe(id) { return PUNTOS[id] || (CENTROS[id] ? [CENTROS[id]] : []); }
+    function distLotes(a, b) {
+        var pa = typeof a === 'string' ? puntosDe(a) : [a], pb = typeof b === 'string' ? puntosDe(b) : [b], min = Infinity;
+        pa.forEach(function (x) { pb.forEach(function (y) { var d = metros(x, y); if (d < min) min = d; }); });
+        return min;
+    }
     function textoDist(m) { return m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
     function urlIr(c) { return 'https://www.google.com/maps/dir/?api=1&destination=' + c[0] + ',' + c[1] + '&travelmode=driving'; }
 
@@ -1206,16 +1216,23 @@
     // Vecino más cercano (probando cada lote como inicio si no hay ubicación) y luego 2-opt: deshace los cruces del recorrido
     function recorridoCorto(ps, desde) {
         if (ps.length < 2) return ps;
-        var c = function (p) { return CENTROS[p.id]; };
-        var largo = function (o) { var t = 0, a = desde; o.forEach(function (p) { if (a) t += metros(a, c(p)); a = c(p); }); return t; };
+        // Distancias calculadas una sola vez: entre lotes (D) y desde su ubicación (U)
+        var D = {}, U = {};
+        ps.forEach(function (a) {
+            D[a.id] = {};
+            ps.forEach(function (b) { D[a.id][b.id] = a === b ? 0 : (D[b.id] && D[b.id][a.id] != null ? D[b.id][a.id] : distLotes(a.id, b.id)); });
+            if (desde) U[a.id] = distLotes(desde, a.id);
+        });
+        var d = function (a, b) { return a ? D[a.id][b.id] : desde ? U[b.id] : 0; };
+        var largo = function (o) { var t = 0, a = null; o.forEach(function (p) { t += d(a, p); a = p; }); return t; };
         var mejor = null;
         (desde ? [null] : ps).forEach(function (ini) {
-            var resto = ps.slice(), orden = [], actual = desde;
-            if (ini) { orden.push(resto.splice(resto.indexOf(ini), 1)[0]); actual = c(ini); }
+            var resto = ps.slice(), orden = [], actual = null;
+            if (ini) { orden.push(resto.splice(resto.indexOf(ini), 1)[0]); actual = ini; }
             while (resto.length) {
                 var k = 0;
-                resto.forEach(function (p, i) { if (metros(actual, c(p)) < metros(actual, c(resto[k]))) k = i; });
-                actual = c(resto[k]);
+                resto.forEach(function (p, i) { if (d(actual, p) < d(actual, resto[k])) k = i; });
+                actual = resto[k];
                 orden.push(resto.splice(k, 1)[0]);
             }
             if (!mejor || largo(orden) < largo(mejor)) mejor = orden;
@@ -1298,8 +1315,8 @@
                     (urlTodos ? '<a class="boton secundario pequeno" href="' + esc(urlTodos) + '">Ver todos en el mapa</a>' : '') +
                 '</div>' +
                 '<ol class="paradas">' + paradas.map(function (x, i) {
-                    var dist = prev && x.c ? textoDist(metros(prev, x.c)) + (prevUsted ? ' de usted' : ' de la anterior') : '';
-                    if (x.c) { prev = x.c; prevUsted = false; }
+                    var dist = prev && x.c ? textoDist(distLotes(prev, String(x.id))) + (prevUsted ? ' de usted' : ' de la anterior') : '';
+                    if (x.c) { prev = String(x.id); prevUsted = false; }
                     var aviso = !x.mr ? 'No está en la programación' : ruta.cuad && x.cuad && x.cuad !== ruta.cuad ? 'Programado para la cuadrilla ' + x.cuad : '';
                     // Pendiente pero visitado hace poco (antes de esta pre-ruta): se avisa según la frecuencia
                     var rec = !x.visita && visitaReciente(x.mr, x.lote, null, hoy());

@@ -265,6 +265,19 @@
         mayor.forEach(function (v) { if (v.distanceTo(c) < mejor.distanceTo(c)) mejor = v; });
         return mejor;
     }
+    // Área (en grados², solo para comparar) del anillo más grande de una capa
+    function areaMayor(capa) {
+        if (capa._areaMayor != null) return capa._areaMayor;
+        var area = 0;
+        (function recorrer(a) {
+            if (a.length && a[0] instanceof L.LatLng) {
+                var s = 0;
+                for (var i = 0, j = a.length - 1; i < a.length; j = i++) s += (a[j].lng + a[i].lng) * (a[j].lat - a[i].lat);
+                area = Math.max(area, Math.abs(s) / 2);
+            } else a.forEach(recorrer);
+        })(capa.getLatLngs());
+        return (capa._areaMayor = area);
+    }
     function popupLote(capa) {
         var p = capa.lote, zona = /^Z(\d+)/i.test(p.m || '') ? p.m.match(/^Z(\d+)/i)[1] : '';
         var lote = p.l && p.l !== 'NA' ? p.l : '';
@@ -491,8 +504,10 @@
                     if (est === 'pendiente') cs.forEach(function (c) { c.bringToFront(); });
                 }
                 if (claves.length > 1 && cs.length) {
-                    var html = est === 'hecho' ? '✓' : est === 'cerrado' ? '🔒' : est === 'subsanar' ? '!' : est === 'curso' ? '▶' : String(k.n);
-                    L.marker(puntoLote(cs[0]), { icon: L.divIcon({ className: 'parada-num' + (est ? ' ' + est : ''), html: html }),
+                    // El número va en el pedazo más grande del lote: el mismo punto con que la pre-ruta mide distancias
+                    var mayor = cs.reduce(function (m, c) { return areaMayor(c) > areaMayor(m) ? c : m; });
+                    var html =est === 'hecho' ? '✓' : est === 'cerrado' ? '🔒' : est === 'subsanar' ? '!' : est === 'curso' ? '▶' : String(k.n);
+                    L.marker(puntoLote(mayor), { icon: L.divIcon({ className: 'parada-num' + (est ? ' ' + est : ''), html: html }),
                         title: (k.esMr ? '' : 'Lote ') + k.v + (est ? ' · ' + TEXTO_RUTA[est] : ''), zIndexOffset: est === 'pendiente' ? 1000 : 0 })
                         .on('click', function () { verLote(cs[0]); }).addTo(marcadores);
                 }
