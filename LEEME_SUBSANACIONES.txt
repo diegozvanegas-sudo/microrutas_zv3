@@ -69,6 +69,26 @@ Cambiar los ítems de revisión
   "Subsanaciones" al guardar). Poner "NO" lo oculta del formulario sin borrar lo ya registrado.
   Después de cambiar ítems, pulse "Actualizar" en la página.
 
+Visitas durante la operación (pestaña "Operación")
+- Al crear una visita se elige el tipo: "🌿 Lote ejecutado" (la revisión de siempre) o "🦺 Durante la operación".
+  La de operación revisa mientras la cuadrilla trabaja: IMPLEMENTACIÓN Y ESTADO DEL PMT, VALLA INFORMATIVA,
+  MALLA(S) DE PROTECCIÓN, DEMARCACIÓN DEL ÁREA DE TRABAJO, CARNET, ESTADO DE DOTACIÓN, EPP, HERRAMIENTAS,
+  ROTULACIÓN DE RECIPIENTES y MANEJO DE COMBUSTIBLE. No lleva fecha de ejecución.
+- Se guarda en la pestaña "Operación" (IDs OPE-00001...) y sus ítems se cambian en la pestaña "Items Operación".
+  Pendiente / subsanado funciona igual. No cuenta como revisión del lote: la parada de la pre-ruta sigue pendiente.
+- En la pre-ruta, los lotes con la cuadrilla trabajando (▶ azul) tienen el botón "🦺 Visita operación".
+- Requiere actualizar el Apps Script (pegar de nuevo apps_script/Code.gs y publicar nueva versión).
+  Al abrir la página se crean solas las pestañas "Operación" e "Items Operación".
+
+Excel con el formato de interventoría
+- "Descargar Excel" baja una hoja por tipo de visita (Lote ejecutado / Durante la operación) con lo filtrado:
+  encabezados verdes y azules, NO pendiente en amarillo, NO ya subsanado en verde, observación "NOVEDAD SUBSANADA
+  EL dd/mm/aaaa" o "PENDIENTE POR SUBSANAR", y CANTIDAD DE NOVEDADES. Al final van ESTADO, fechas e ID en gris.
+- Para saber qué ítems estuvieron en NO, el Apps Script anota la columna ÍTEMS SUBSANADOS al subsanar
+  (solo desde esta versión; las subsanaciones anteriores salen con sus ítems en SI).
+- En la hoja de Google cada fila guardada se colorea igual. Para colorear las que ya existían, ejecute una vez
+  la función "colorearTodo" desde el editor de Apps Script.
+
 Pre-rutas compartidas (pestaña "Rutas")
 - Las pre-rutas (lotes que mandan a revisar) se guardan en la pestaña "Rutas" de la misma hoja, una fila
   por lote: CUADRILLA, LOTE, FECHA DE EJECUCIÓN, ORDEN, CARGADA. Así se ven en cualquier celular.

@@ -339,14 +339,16 @@
     window.addEventListener('pageshow', function (e) { copiaSubs = null; if (e.persisted && estadoRuta) location.reload(); });
     function visitaGuardada(id) {
         var c = copia(), r = c && (c.registros || []).filter(function (x) { return x.ID === id; })[0];
-        return r ? { r: r, items: c.items || [], t: c.t } : null;
+        return r ? { r: r, items: (/^OPE-/.test(r.ID) ? c.itemsOperacion : c.items) || [], t: c.t } : null;
     }
     // La de la pre-ruta si la hay; si no, la visita más reciente del lote en la copia (ya viene ordenada)
     function visitaDeCapa(capa) {
         if (capa.rutaVisita) { var v = visitaGuardada(capa.rutaVisita); return v ? v.r : null; }
         var c = copia(), p = capa.lote, lote = p.l && p.l !== 'NA' ? String(p.l) : '', mr = String(p.m || '').toUpperCase();
         if (!c) return null;
+        // Las visitas durante la operación (OPE-) no dicen cómo quedó el lote: se usa la última del lote ejecutado
         return (c.registros || []).filter(function (r) {
+            if (/^OPE-/.test(r.ID)) return false;
             return lote ? String(r.LOTE || '').trim() === lote : mr && String(r.MICRORRUTA || '').trim().toUpperCase() === mr;
         })[0] || null;
     }
