@@ -91,9 +91,11 @@
 <body>
 <div id="barra">
     <div class="fila">
-        <input id="buscar" type="search" placeholder="Lote o microrruta (ej.: 532 o Z2CC0308)" aria-label="Buscar lote o microrruta"
+        <input id="buscar" type="search" placeholder="Lote, microrruta o coordenadas (532 · 6.2751N 75.5737W)" aria-label="Buscar lote, microrruta o coordenadas"
                autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="search">
         <button type="button" class="primario" id="btn-buscar">Buscar</button>
+        <button type="button" class="secundario" id="btn-foto" title="Ubicar el lote con una foto que tenga las coordenadas GPS" aria-label="Ubicar con foto">📷</button>
+        <input type="file" id="foto" accept="image/*" hidden>
         <a class="boton secundario" id="btn-completo" href="index.html" title="Abrir el mapa completo con todas las capas">Mapa completo</a>
     </div>
     <div class="chips" id="chips" role="group" aria-label="Cuadrillas y capas"></div>
@@ -107,6 +109,7 @@
 
 <script src="js/leaflet.js"></script>
 <script src="data/rapido/indice.js"></script>
+<script src="js/coordenadas.js"></script>
 <script>
 (function () {
     var IDX = window.indiceRapido || { cuadrillas: {}, lotes: {}, mrs: {}, capas: {} };
@@ -424,9 +427,108 @@
             return '<span><i style="background:' + e.fillColor + ';border-color:' + e.color + '"></i>' + n + ' ' + (n === 1 ? t[1] : t[2]) + '</span>';
         }).join('');
     }
+    // ---------- Ubicar el lote por coordenadas (escritas o leídas de una foto) ----------
+    var puntoCapa = L.layerGroup().addTo(map);
+    // Metros aproximados en la zona (proyección plana local: sobra para distancias de cientos de metros)
+    function plano(ll, lat0) { return { x: ll.lng * 111320 * Math.cos(lat0 * Math.PI / 180), y: ll.lat * 110540 }; }
+    function anillos(capa) {
+        var out = [];
+        (function recorrer(a) { if (a.length && a[0] instanceof L.LatLng) out.push(a); else a.forEach(recorrer); })(capa.getLatLngs());
+        return out;
+    }
+    // Par/impar sobre todos los anillos: respeta los huecos y los lotes de varias partes
+    function contiene(capa, ll) {
+        if (!capa.getBounds().contains(ll)) return false;
+        var dentro = false;
+        anillos(capa).forEach(function (a) {
+            for (var i = 0, j = a.length - 1; i < a.length; j = i++) {
+                var yi = a[i].lat, yj = a[j].lat, xi = a[i].lng, xj = a[j].lng;
+                if ((yi > ll.lat) !== (yj > ll.lat) && ll.lng < (xj - xi) * (ll.lat - yi) / (yj - yi) + xi) dentro = !dentro;
+            }
+        });
+        return dentro;
+    }
+    function distanciaBorde(capa, ll) {
+        var p = plano(ll, ll.lat), min = Infinity;
+        anillos(capa).forEach(function (a) {
+            for (var i = 0, j = a.length - 1; i < a.length; j = i++) {
+                var A = plano(a[j], ll.lat), B = plano(a[i], ll.lat), dx = B.x - A.x, dy = B.y - A.y;
+                var t = dx || dy ? Math.max(0, Math.min(1, ((p.x - A.x) * dx + (p.y - A.y) * dy) / (dx * dx + dy * dy))) : 0;
+                min = Math.min(min, Math.hypot(p.x - A.x - t * dx, p.y - A.y - t * dy));
+            }
+        });
+        return min;
+    }
+    var CERCA_M = 150;
+    function ubicarPunto(c) {
+        var ll = L.latLng(c.lat, c.lng), txt = c.lat.toFixed(5) + ', ' + c.lng.toFixed(5);
+        estadoRuta = null;
+        marcadores.clearLayers();
+        puntoCapa.clearLayers();
+        L.circleMarker(ll, { radius: 8, color: '#fff', weight: 3, fillColor: '#7c3aed', fillOpacity: 1, bubblingMouseEvents: false })
+            .bindTooltip('📍 ' + txt, { direction: 'top', offset: [0, -8] }).addTo(puntoCapa);
+        $('buscar').value = txt;
+        // Solo se cargan las cuadrillas cuyo recuadro (con margen) incluye el punto
+        var cuads = ordenCuad.filter(function (k) { return L.latLngBounds(IDX.cuadrillas[k].b).pad(0.05).contains(ll); });
+        if (!cuads.length) { map.setView(ll, 17); return toast('El punto ' + txt + ' queda fuera de la zona de los lotes.'); }
+        cuads.forEach(function (k) { if (activas.indexOf(k) === -1) activas.push(k); });
+        mostrarCuadrillas(false);
+        map.setView(ll, 18);
+        var faltan = cuads.length;
+        cuads.forEach(function (k) { asegurarCuadrilla(k, function () { if (--faltan === 0) elegir(); }); });
+        function elegir() {
+            var dentro = null, cerca = null, dmin = Infinity;
+            cuads.forEach(function (k) {
+                grupos[k].eachLayer(function (capa) {
+                    if (dentro) return;
+                    if (contiene(capa, ll)) { dentro = capa; return; }
+                    // Descarta rápido los lotes lejanos antes de medir el borde
+                    if (!capa.getBounds().pad(0.5).contains(ll) && capa.getBounds().getCenter().distanceTo(ll) > CERCA_M * 4) return;
+                    var d = distanciaBorde(capa, ll);
+                    if (d < dmin) { dmin = d; cerca = capa; }
+                });
+            });
+            var capa = dentro || (dmin <= CERCA_M ? cerca : null);
+            if (!capa) return toast('No hay lotes a menos de ' + CERCA_M + ' m de ' + txt + '.');
+            var p = capa.lote, nombre = p.l && p.l !== 'NA' ? 'Lote ' + p.l : p.m;
+            resaltarMr(p.m);
+            var b = capa.getBounds(); // copia: getBounds() es el recuadro interno del lote
+            map.fitBounds(L.latLngBounds(b.getSouthWest(), b.getNorthEast()).extend(ll), { padding: [40, 40], maxZoom: 18 });
+            verLote(capa, ll);
+            toast(dentro ? '📍 Está dentro del ' + nombre : '📍 Ningún lote contiene el punto; el más cercano es el ' + nombre + ' (a ' + Math.round(dmin) + ' m).');
+        }
+    }
+
+    // Foto: primero el GPS guardado en la foto (EXIF); si no lo tiene (WhatsApp lo borra), se lee el texto de la marca de agua
+    function cargarScript(src) {
+        return new Promise(function (ok, mal) { var s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = mal; document.head.appendChild(s); });
+    }
+    function leerFoto(file) {
+        $('btn-foto').disabled = true;
+        $('estado').textContent = 'Leyendo la ubicación de la foto…';
+        var exif = window.exifr ? Promise.resolve() : cargarScript('https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/lite.umd.js');
+        exif.then(function () { return window.exifr.gps(file); }).catch(function () { return null; }).then(function (gps) {
+            if (gps && isFinite(gps.latitude) && isFinite(gps.longitude)) return { lat: gps.latitude, lng: gps.longitude };
+            $('estado').textContent = 'La foto no trae GPS; leyendo las coordenadas escritas en ella (puede tardar unos segundos)…';
+            var ocr = window.Tesseract ? Promise.resolve() : cargarScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
+            return ocr.then(function () { return window.Tesseract.recognize(file, 'eng'); }).then(function (r) {
+                var c = window.leerCoordenadas(r.data.text);
+                if (!c) throw new Error('No se encontraron coordenadas en la foto. Escríbalas en el buscador, p. ej. 6.2751N 75.5737W.');
+                return c;
+            });
+        }).then(ubicarPunto).catch(function (err) {
+            toast(err && err.message && /coordenadas/.test(err.message) ? err.message : 'No se pudo leer la foto. Revise la conexión o escriba las coordenadas.');
+        }).then(function () { $('btn-foto').disabled = false; $('foto').value = ''; pintarChips(); });
+    }
+    $('btn-foto').onclick = function () { $('foto').click(); };
+    $('foto').onchange = function () { if (this.files[0]) leerFoto(this.files[0]); };
+
     function buscar() {
         var v = $('buscar').value.trim();
         if (!v) return;
+        var coord = window.leerCoordenadas(v);
+        if (coord) { ubicarPunto(coord); $('buscar').blur(); return; }
+        puntoCapa.clearLayers();
         estadoRuta = null; // búsqueda a mano: deja de pintar la pre-ruta
         ir(v.split(/[,\s]+/), true);
         $('buscar').blur();
@@ -449,7 +551,10 @@
     if (q.get('c')) activas = q.get('c').split(',').filter(function (c) { return IDX.cuadrillas[c]; });
     mostrarCuadrillas(!q.get('lote') && !q.get('mr'));
     capasActivas.forEach(function (k) { mostrarCapa(k, true); });
-    if (q.get('lote') || q.get('mr')) {
+    // ?ll=6.2751,-75.5737: ubica el lote que contiene el punto
+    var llUrl = q.get('ll') && window.leerCoordenadas(q.get('ll'));
+    if (llUrl) ubicarPunto(llUrl);
+    else if (q.get('lote') || q.get('mr')) {
         var lista = (q.get('lote') || q.get('mr')).split(',');
         $('buscar').value = lista.join(', ');
         ir(lista, true);

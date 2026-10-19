@@ -261,7 +261,7 @@
 <main>
     <section class="ruta" id="ruta" aria-label="Pre-ruta del día"></section>
     <div class="buscador ir-mapa">
-        <input id="ir-mapa" data-buscar="mr" type="search" placeholder="Ir al mapa: lote, microrruta o dirección" aria-label="Buscar lote en el mapa"
+        <input id="ir-mapa" data-buscar="mr" type="search" placeholder="Ir al mapa: lote, microrruta, dirección o coordenadas" aria-label="Buscar lote en el mapa"
                autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go">
     </div>
     <div id="aviso"></div>
@@ -360,6 +360,7 @@
 <script src="js/subsanaciones_config.js"></script>
 <script src="data/direcciones_lotes.js"></script>
 <script src="data/centros_lotes.js"></script>
+<script src="js/coordenadas.js"></script>
 <script>
 (function () {
     var CFG = window.SUBSANACIONES_CONFIG || {};
@@ -833,6 +834,14 @@
         input.closest('.buscador').appendChild(caja);
         if (!q) return cerrarSugerencias();
         marcada = -1;
+        // Coordenadas (6.2751N 75.5737W): el mapa busca el lote que contiene ese punto
+        var c = input.id === 'ir-mapa' && window.leerCoordenadas(q);
+        if (c) {
+            caja.innerHTML = '<button type="button" data-ll="' + c.lat + ',' + c.lng + '"><span class="s-ir">Ver en mapa ›</span><span class="s-mr">📍 Ubicar el lote en ' +
+                c.lat.toFixed(5) + ', ' + c.lng.toFixed(5) + '</span></button>';
+            caja.hidden = false;
+            return;
+        }
         caja.innerHTML = lista.length ? lista.map(function (x) {
             return '<button type="button" data-mr="' + esc(x.mr) + '" data-lote="' + esc(x.lote) + '">' +
                 (input.id === 'ir-mapa' ? '<span class="s-ir">Ver en mapa ›</span>' : '') + '<span class="s-mr">' + resaltar(x.mr, q) +
@@ -855,7 +864,11 @@
     function actualizarLimpiar() { form.querySelector('[data-limpiar]').hidden = !form.querySelector('[data-campo="MICRORRUTA"]').value; }
     // pointerdown + preventDefault: el toque no le quita el foco al campo antes de elegir
     caja.addEventListener('pointerdown', function (ev) { ev.preventDefault(); });
-    caja.addEventListener('click', function (ev) { var b = ev.target.closest('[data-mr]'); if (b) elegir(b.dataset.mr, b.dataset.lote); });
+    caja.addEventListener('click', function (ev) {
+        var ll = ev.target.closest('[data-ll]');
+        if (ll) { location.href = 'mapa_rapido.html?ll=' + ll.dataset.ll; return; }
+        var b = ev.target.closest('[data-mr]'); if (b) elegir(b.dataset.mr, b.dataset.lote);
+    });
     document.querySelectorAll('[data-buscar]').forEach(function (input) {
         input.addEventListener('input', function () { mostrarSugerencias(input); actualizarLimpiar(); });
         input.addEventListener('focus', function () { if (input.value.trim()) mostrarSugerencias(input); });
@@ -863,6 +876,8 @@
         input.addEventListener('keydown', function (ev) {
             var bs = caja.hidden ? [] : caja.querySelectorAll('[data-mr]');
             if (ev.key === 'Escape' && !caja.hidden) { ev.preventDefault(); ev.stopPropagation(); return cerrarSugerencias(); }
+            var c = ev.key === 'Enter' && input.id === 'ir-mapa' && window.leerCoordenadas(input.value);
+            if (c) { ev.preventDefault(); location.href = 'mapa_rapido.html?ll=' + c.lat + ',' + c.lng; return; }
             if (!bs.length) {
                 // Sin sugerencias: desde "Ir al mapa" igual se busca lo escrito (número = lote, texto = microrruta)
                 var v = input.value.trim();
