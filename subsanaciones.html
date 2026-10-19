@@ -410,7 +410,7 @@
     var LOTES = window.direccionesLotes || {};
     var FIJAS = ['MICRORRUTA', 'LOTE', 'ÁREA M2', 'ZONA', 'CUADRILLA', 'FECHA DE EJECUCIÓN', 'FECHA DE LA VISITA', 'INTERVENTOR',
         'OBSERVACIONES NOVEDADES', 'CANTIDAD DE NOVEDADES', 'ESTADO', 'FECHA SUBSANACIÓN', 'OBSERVACIÓN SUBSANACIÓN', 'EVIDENCIA', 'ID', 'REGISTRADO POR',
-        'ÚLTIMA MODIFICACIÓN', 'ÍTEMS SUBSANADOS'];
+        'ÚLTIMA MODIFICACIÓN', 'ÍTEMS SUBSANADOS', 'FECHA DE REGISTRO'];
     var FECHAS = ['FECHA DE EJECUCIÓN', 'FECHA DE LA VISITA', 'FECHA SUBSANACIÓN'];
     var items = [], columnas = [], registros = [], editando = null, abiertos = {};
     // Dos tipos de visita: al lote ya ejecutado (hoja "Subsanaciones", SUB-) y durante la operación (hoja "Operación", OPE-)
@@ -479,6 +479,17 @@
         registros.sort(function (a, b) {
             return claveFecha(b['FECHA DE LA VISITA']).localeCompare(claveFecha(a['FECHA DE LA VISITA'])) || num(b) - num(a);
         });
+    }
+    // La lista muestra primero lo último registrado (FECHA DE REGISTRO; si la hoja aún no la tiene, la última modificación).
+    // registros sigue ordenado por fecha de visita: de eso dependen la frecuencia, la "última visita" y la pre-ruta.
+    function claveRegistro(r) {
+        var m = String(r['FECHA DE REGISTRO'] || r['ÚLTIMA MODIFICACIÓN'] || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+        var z = function (n) { return ('0' + (n || 0)).slice(-2); };
+        return m ? m[3] + z(m[2]) + z(m[1]) + z(m[4]) + z(m[5]) + z(m[6]) : claveFecha(r['FECHA DE LA VISITA']) + '000000';
+    }
+    function porRegistro(a, b) {
+        var num = function (r) { return Number(String(r.ID || '').replace(/\D/g, '')) || 0; };
+        return claveRegistro(b).localeCompare(claveRegistro(a)) || num(b) - num(a);
     }
     function canonico(r) {
         var porNorm = {};
@@ -604,7 +615,7 @@
             return '<div class="tarjeta' + (est === t[0] ? ' activa' : '') + '" data-estado="' + t[0] + '"><div class="num">' + cuenta[t[0]] + '</div><div class="tit">' + t[1] + '</div></div>';
         }).join('');
 
-        var lista = filtrados();
+        var lista = filtrados().sort(porRegistro);
         if (!lista.length) {
             $('tabla').innerHTML = '<div class="vacio">' + (registros.length ? 'Ningún registro coincide con los filtros.' : 'Aún no hay visitas. Use "+ Nueva visita" o pegue su Excel en la hoja de Drive.') + '</div>';
             return;
