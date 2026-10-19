@@ -169,6 +169,11 @@
     .tag-curso { font-size: 11px; font-weight: 700; color: #fff; background: #2563eb; padding: 1px 7px; border-radius: 99px; }
     .parada.encurso { background: #eff6ff; }
     .parada.encurso .n { background: #2563eb; color: #fff; font-size: 11px; }
+    /* Dónde está el interventor ahora (GPS seguido mientras la página está abierta) */
+    .ubic { margin: 8px 14px 0; padding: 7px 10px; border-radius: 10px; background: #fff7e6; color: #8a5a00; font-size: 13px; }
+    .ubic.lejos { background: #eef2f4; color: var(--muted); }
+    .tag-aqui { font-size: 11px; font-weight: 700; color: #fff; background: #d97706; padding: 1px 7px; border-radius: 99px; }
+    .parada.aqui { box-shadow: inset 4px 0 0 #d97706; }
     .tipo-ruta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
     .tipo-ruta input { position: absolute; opacity: 0; pointer-events: none; }
     .tipo-ruta label { margin: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-size: 13px; color: var(--ink); text-align: center; }
@@ -1349,7 +1354,46 @@
         return min;
     }
     function textoDist(m) { return m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
-    function urlIr(c) { return 'https://www.google.com/maps/dir/?api=1&destination=' + c[0] + ',' + c[1] + '&travelmode=driving'; }
+    // Google Maps desde donde está usted (origin) hasta la parte del lote más cercana a usted.
+    // Lote sin coordenadas: se busca por su dirección. Sin ubicación, Maps usa la del celular.
+    function destinoLote(id) {
+        var ps = puntosDe(String(id));
+        if (!ps.length) return null;
+        if (!posicion) return CENTROS[id] || ps[0];
+        return ps.reduce(function (a, p) { return metros(posicion, p) < metros(posicion, a) ? p : a; });
+    }
+    function urlIr(id, dir) {
+        var c = destinoLote(id), origen = posicion ? '&origin=' + posicion[0].toFixed(6) + ',' + posicion[1].toFixed(6) : '';
+        var dest = c ? c[0] + ',' + c[1] : dir ? encodeURIComponent(dir + ', Medellín, Antioquia') : '';
+        return dest ? 'https://www.google.com/maps/dir/?api=1' + origen + '&destination=' + dest + '&travelmode=driving' : '';
+    }
+    // Ruta con las próximas paradas, también desde donde está usted
+    function urlRuta(proximas) {
+        if (!proximas.length) return '';
+        var c = function (x) { var d = destinoLote(x.id); return d[0] + ',' + d[1]; };
+        return 'https://www.google.com/maps/dir/?api=1' + (posicion ? '&origin=' + posicion[0].toFixed(6) + ',' + posicion[1].toFixed(6) : '') +
+            '&destination=' + c(proximas[proximas.length - 1]) +
+            (proximas.length > 1 ? '&waypoints=' + encodeURIComponent(proximas.slice(0, -1).map(c).join('|')) : '') + '&travelmode=driving';
+    }
+
+    // Ubicación seguida mientras la página está abierta: así la pre-ruta siempre sabe en qué lote (o cerca de cuál) está
+    // el interventor y cada parada dice a qué distancia queda de usted. Solo repinta al moverse unos metros.
+    var precision = 0, estadoUbic = '', vigia = null, pintadaEn = null;
+    var AQUI_M = 60; // dentro de esta distancia de alguna parte del lote se considera "en el lote"
+    function seguirUbicacion() {
+        if (vigia !== null || !navigator.geolocation) { if (!navigator.geolocation) estadoUbic = 'sin'; return; }
+        estadoUbic = 'buscando';
+        vigia = navigator.geolocation.watchPosition(function (p) {
+            posicion = [p.coords.latitude, p.coords.longitude];
+            precision = p.coords.accuracy || 0;
+            var antes = estadoUbic; estadoUbic = 'ok';
+            if (antes !== 'ok' || !pintadaEn || metros(pintadaEn, posicion) > 25) pintarRutas();
+        }, function (err) {
+            if (err.code === 1) { estadoUbic = 'negada'; navigator.geolocation.clearWatch(vigia); }
+            else if (!posicion) estadoUbic = 'sin';
+            pintarRutas();
+        }, { enableHighAccuracy: true, maximumAge: 15000, timeout: 30000 });
+    }
 
     // Pendientes primero (en el recorrido más corto, o como fueron llegando si la pre-ruta está "por llegada");
     // luego los dejados para después, los sin ubicación, los que la cuadrilla aún está ejecutando y al final los ya revisados
@@ -1454,18 +1498,29 @@
                 '<span class="sub">Pegue el mensaje de WhatsApp con los lotes y arme su pre-ruta del día.</span></button>';
             return;
         }
+        seguirUbicacion();
+        pintadaEn = posicion;
         cont.innerHTML = rutas.map(function (ruta, ri) {
             var paradas = ruta.paradas.map(function (p) {
-                var x = infoLote(p.id); x.fecha = p.fecha; x.despues = p.despues; x.carga = p.carga; x.visita = visitaDe(p, x); x.encurso = !x.visita && p.encurso; return x;
+                var x = infoLote(p.id); x.fecha = p.fecha; x.despues = p.despues; x.carga = p.carga; x.visita = visitaDe(p, x); x.encurso = !x.visita && p.encurso;
+                x.du = posicion && puntosDe(String(x.id)).length ? distLotes(posicion, String(x.id)) : null;
+                return x;
             });
+            // Parada más cercana a usted; si está a menos de AQUI_M (o dentro del margen del GPS) usted está en ese lote
+            var cerca = paradas.reduce(function (a, x) { return x.du !== null && (!a || x.du < a.du) ? x : a; }, null);
+            var aqui = cerca && cerca.du <= Math.max(AQUI_M, Math.min(precision, 150)) ? cerca : null;
+            var nombre = function (x) { return x.lote ? 'Lote ' + x.lote : x.mr; };
+            var ubic = aqui ? '<div class="ubic">📍 Usted está en el <b>' + esc(nombre(aqui)) + '</b>' + (aqui.visita ? ' (ya revisado)' : '') + '</div>'
+                : cerca ? '<div class="ubic lejos">📍 Lo más cercano: <b>' + esc(nombre(cerca)) + '</b> a ' + textoDist(cerca.du) + '</div>'
+                : estadoUbic === 'buscando' ? '<div class="ubic lejos">📍 Buscando su ubicación…</div>'
+                : estadoUbic === 'negada' ? '<div class="ubic lejos">📍 Active la ubicación del navegador para ver en qué lote está.</div>' : '';
             var fechas = paradas.map(function (x) { return x.fecha; }).filter(function (f, i, a) { return f && a.indexOf(f) === i; }).sort();
             var hechas = paradas.filter(function (x) { return x.visita; }).length;
             // El lote que la cuadrilla está ejecutando no es "siguiente": aún no está listo para revisar
             var pend = paradas.filter(function (x) { return !x.visita; }), listos = pend.filter(function (x) { return !x.encurso; }), sig = listos[0];
             var llegada = porLlegada(ruta);
             var proximas = listos.filter(function (x) { return x.c; }).slice(0, 4); // Google Maps en el celular admite 3 paradas + destino
-            var gmaps = proximas.length ? 'https://www.google.com/maps/dir/?api=1&destination=' + proximas[proximas.length - 1].c.join(',') +
-                (proximas.length > 1 ? '&waypoints=' + encodeURIComponent(proximas.slice(0, -1).map(function (x) { return x.c.join(','); }).join('|')) : '') + '&travelmode=driving' : '';
+            var gmaps = urlRuta(proximas);
             // "Ver todos en el mapa": el mapa pinta de otro color los ya revisados y los cerrados
             var enMapa = paradas.filter(function (x) { return x.lote || x.mr; });
             var idMapa = function (x) { return enMapaPorLote(x.lote) || !x.mr ? x.lote : x.mr; };
@@ -1488,30 +1543,34 @@
                                                   : paradas.length + ' por revisar') +
                         (llegada ? ' · 🕒 en orden de llegada' : '') + '</div></div>' +
                     '<button type="button" class="ruta-quitar" data-ruta="quitar" data-ri="' + ri + '" aria-label="Quitar pre-ruta">×</button></div>' +
-                '<div class="progreso"><span style="width:' + Math.round(100 * hechas / paradas.length) + '%"></span></div>' +
+                '<div class="progreso"><span style="width:' + Math.round(100 * hechas / paradas.length) + '%"></span></div>' + ubic +
                 '<div class="ruta-acciones">' +
                     (pend.length > 1 ? (llegada
                         ? '<button type="button" class="secundario pequeno" data-ruta="ordenar" data-ri="' + ri + '">📍 Ordenar por cercanía</button>'
                         : '<button type="button" class="secundario pequeno" data-ruta="ordenar" data-ri="' + ri + '">📍 Ordenar desde mi ubicación</button>' +
                           '<button type="button" class="secundario pequeno" data-ruta="llegada" data-ri="' + ri + '">🕒 Orden de llegada</button>') : '') +
-                    (gmaps ? '<a class="boton primario pequeno" target="_blank" rel="noopener" href="' + esc(gmaps) + '">Ruta en Google Maps' + (pend.length > proximas.length ? ' (próximos ' + proximas.length + ')' : '') + '</a>' : '') +
+                    (gmaps ? '<a class="boton primario pequeno" target="_blank" rel="noopener" data-ir-ruta="' + ri + '" href="' + esc(gmaps) + '">Ruta en Google Maps' + (pend.length > proximas.length ? ' (próximos ' + proximas.length + ')' : '') + '</a>' : '') +
                     (urlTodos ? '<a class="boton secundario pequeno" href="' + esc(urlTodos) + '">Ver todos en el mapa</a>' : '') +
                 '</div>' +
                 '<ol class="paradas">' + paradas.map(function (x, i) {
                     var dist = prev && x.c ? textoDist(distLotes(prev, String(x.id))) + (prevUsted ? ' de usted' : ' de la anterior') : '';
+                    // Además de la anterior, siempre la distancia desde donde está usted
+                    if (x.du !== null && !prevUsted && x !== aqui) dist = (dist ? dist + ' · ' : '') + textoDist(x.du) + ' de usted';
+                    if (x === aqui) dist = '';
                     if (x.c) { prev = String(x.id); prevUsted = false; }
                     var aviso = !x.mr ? 'No está en la programación' : ruta.cuad && x.cuad && x.cuad !== ruta.cuad ? 'Programado para la cuadrilla ' + x.cuad : '';
                     // Pendiente pero visitado hace poco (antes de esta pre-ruta): se avisa según la frecuencia
                     var rec = !x.visita && visitaReciente(x.mr, x.lote, null, hoy());
                     if (rec && rec.reciente) aviso = (aviso ? aviso + ' · ' : '') + 'Visitado ' + textoDias(rec.d) + (rec.frec ? ' (frecuencia ' + rec.frec.toLowerCase() + ')' : '');
                     var llego = !x.visita && horaCarga(x.carga);
-                    return '<li class="parada' + (x.visita ? ' hecha' : x.encurso ? ' encurso' : x === sig ? ' siguiente' : '') + '">' +
+                    return '<li class="parada' + (x.visita ? ' hecha' : x.encurso ? ' encurso' : x === sig ? ' siguiente' : '') + (x === aqui ? ' aqui' : '') + '">' +
                         '<span class="n">' + (x.visita ? (cerrada(x) ? '🔒' : '✓') : x.encurso ? '▶' : i + 1) + '</span>' +
                         '<div class="info"><div class="titulo"><b>' + esc(x.lote ? 'Lote ' + x.lote : x.mr) + '</b>' +
                             (x.lote && x.mr ? ' <span class="sub">' + esc(x.mr) + '</span>' : '') +
                             (fechas.length > 1 && x.fecha ? ' <span class="sub">· ejec. ' + esc(aTexto(x.fecha).slice(0, 5)) + '</span>' : '') +
                             (llego && !x.encurso ? ' <span class="sub">· 🕒 ' + esc(llego) + '</span>' : '') +
                             (x.encurso ? ' <span class="tag-curso">▶ Cuadrilla trabajando aquí' + (horaCarga(x.encurso) ? ' · desde ' + esc(horaCarga(x.encurso)) : '') + '</span>' : '') +
+                            (x === aqui ? ' <span class="tag-aqui">📍 Usted está aquí</span>' : '') +
                             (x === sig ? ' <span class="tag-sig">Siguiente</span>' : '') +
                             (x.despues && !x.visita ? ' <span class="tag-despues">Para después</span>' : '') + (x.visita ? ' ' + badge(x.visita.ESTADO) : '') + '</div>' +
                             (x.d ? '<div class="sub dir">' + esc(x.d) + '</div>' : '') +
@@ -1520,7 +1579,7 @@
                         '<div class="btns">' +
                             (x.visita ? '<button type="button" class="secundario pequeno" data-editar="' + esc(x.visita.ID) + '">Ver visita</button>'
                                       : '<button type="button" class="primario pequeno" data-ruta="registrar" data-ri="' + ri + '" data-id="' + esc(x.id) + '">Registrar</button>') +
-                            (x.c && !x.visita ? '<a class="boton secundario pequeno" target="_blank" rel="noopener" href="' + esc(urlIr(x.c)) + '">Cómo llegar</a>' : '') +
+                            ((x.c || x.d) && !x.visita ? '<a class="boton ' + (x === sig ? 'primario' : 'secundario') + ' pequeno" target="_blank" rel="noopener" data-ir="' + esc(x.id) + '" href="' + esc(urlIr(x.id, x.d)) + '">🧭 Cómo llegar</a>' : '') +
                             (x.mr || x.lote ? '<a class="boton secundario pequeno" href="' + esc(urlMapa(x.mr, x.lote)) + '">Mapa</a>' : '') +
                             (x.encurso && hayOperacion ? '<button type="button" class="secundario pequeno" data-ruta="operacion" data-ri="' + ri + '" data-id="' + esc(x.id) + '">🦺 Visita operación</button>' : '') +
                             (x.encurso ? '<button type="button" class="secundario pequeno" data-ruta="termino" data-ri="' + ri + '" data-id="' + esc(x.id) + '">✓ Ya terminó</button>' : '') +
@@ -1534,6 +1593,17 @@
     }
 
     $('ruta').onclick = function (ev) {
+        // "Cómo llegar" / "Ruta en Google Maps": el enlace se arma al tocarlo, con la ubicación de ese momento
+        var ir = ev.target.closest('[data-ir]');
+        if (ir) { ir.href = urlIr(ir.dataset.ir, infoLote(ir.dataset.ir).d) || ir.href; return; }
+        var irR = ev.target.closest('[data-ir-ruta]');
+        if (irR) {
+            var rr = rutas[+irR.dataset.irRuta];
+            var prox = rr ? rr.paradas.map(function (p) { var x = infoLote(p.id); x.visita = visitaDe(p, x); x.encurso = !x.visita && p.encurso; return x; })
+                .filter(function (x) { return !x.visita && !x.encurso && x.c; }).slice(0, 4) : [];
+            irR.href = urlRuta(prox) || irR.href;
+            return;
+        }
         var ed = ev.target.closest('[data-editar]');
         if (ed) return abrir(registros.find(function (r) { return r.ID === ed.dataset.editar; }));
         var b = ev.target.closest('[data-ruta]');

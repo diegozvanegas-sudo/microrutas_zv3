@@ -29,6 +29,12 @@ Qué hace
 - Cada lote guarda la hora en que llegó (columna CARGADA). "🕒 Orden de llegada" ordena la pre-ruta así,
   y "Ver todos en el mapa" numera los lotes en ese mismo orden. "📍 Ordenar por cercanía" vuelve al recorrido corto.
   La columna EN CURSO de la pestaña "Rutas" requiere actualizar el Apps Script (nueva versión).
+- Mientras la página está abierta sigue el GPS del celular (pide permiso de ubicación una vez): cada pre-ruta
+  dice "📍 Usted está en el Lote X" (a menos de 60 m del lote) o "Lo más cercano: Lote X a 350 m", ese lote se
+  marca "Usted está aquí" y cada parada muestra a qué distancia queda de usted además de la anterior.
+- "🧭 Cómo llegar" (pre-ruta y ficha del mapa rápido) y "Ruta en Google Maps" salen desde donde está usted en el
+  momento de tocarlos, hacia la parte del lote más cercana a usted. Lote sin coordenadas: se busca por su dirección.
+  El mapa rápido sigue su ubicación todo el tiempo (punto azul); el botón ◎ solo centra el mapa en usted.
 - Ubicar un lote por coordenadas: en el buscador del mapa rápido (o en "Ir al mapa") escriba o pegue
   6.2751N 75.5737W, 6.2751, -75.5737 o un link de Google Maps. El botón 📷 lee la foto: primero el GPS
   guardado en ella y, si no lo tiene (WhatsApp lo borra), el texto de la marca de agua.

@@ -146,27 +146,61 @@
     L.control.layers({ 'Satélite': satelite, 'Calles': calles }, null, { position: 'topright' }).addTo(map);
     map.on('baselayerchange', function (e) { guardar('rapido_base', e.layer === calles ? 'calles' : 'satelite'); });
 
-    // Botón "mi ubicación"
-    var miPunto = null;
+    // Ubicación seguida todo el tiempo (punto azul); "Cómo llegar" sale siempre desde aquí.
+    // El botón ◎ solo centra el mapa en usted: no mueve el mapa cada vez que el GPS se actualiza.
+    var miPunto = null, miPos = null, centrar = false, avisoUbic = false;
+    function seguir() { map.locate({ watch: true, setView: false, enableHighAccuracy: true, maximumAge: 15000, timeout: 30000 }); }
     var Ubicar = L.Control.extend({
         options: { position: 'topleft' },
         onAdd: function () {
             var div = L.DomUtil.create('div', 'leaflet-bar ubicar');
             div.innerHTML = '<a href="#" title="Mi ubicación" role="button">◎</a>';
             L.DomEvent.disableClickPropagation(div);
-            div.firstChild.onclick = function (ev) { ev.preventDefault(); map.locate({ setView: true, maxZoom: 17, enableHighAccuracy: true }); };
+            div.firstChild.onclick = function (ev) {
+                ev.preventDefault();
+                if (miPos) return map.setView(miPos, Math.max(map.getZoom(), 17));
+                centrar = true; avisoUbic = true; seguir();
+            };
             return div;
         }
     });
     map.addControl(new Ubicar());
     map.on('locationfound', function (e) {
+        miPos = e.latlng;
         if (miPunto) map.removeLayer(miPunto);
         miPunto = L.layerGroup([
             L.circle(e.latlng, { radius: e.accuracy, color: '#2563eb', weight: 1, fillOpacity: .1, interactive: false }),
-            L.circleMarker(e.latlng, { radius: 7, color: '#fff', weight: 2, fillColor: '#2563eb', fillOpacity: 1 })
+            L.circleMarker(e.latlng, { radius: 7, color: '#fff', weight: 2, fillColor: '#2563eb', fillOpacity: 1, interactive: false })
         ]).addTo(map);
+        if (centrar) { centrar = false; map.setView(e.latlng, Math.max(map.getZoom(), 17)); }
     });
-    map.on('locationerror', function () { toast('No se pudo obtener su ubicación.'); });
+    map.on('locationerror', function (e) {
+        // Sin permiso no se insiste; un corte pasajero del GPS no se avisa si ya se sabía dónde estaba
+        if (avisoUbic || (!miPos && e.code === 1)) toast(e.code === 1 ? 'Active la ubicación del navegador para que "Cómo llegar" salga desde donde está.' : 'No se pudo obtener su ubicación.');
+        avisoUbic = false;
+    });
+    seguir();
+    // Vértice del lote más cercano a usted (en lotes largos el centro puede quedar lejos de la entrada)
+    function puntoCercano(capa) {
+        if (!miPos) return puntoLote(capa);
+        var mejor = null, dMin = Infinity;
+        (function recorrer(a) {
+            if (a.length && a[0] instanceof L.LatLng) a.forEach(function (p) { var d = miPos.distanceTo(p); if (d < dMin) { dMin = d; mejor = p; } });
+            else a.forEach(recorrer);
+        })(capa.getLatLngs());
+        return mejor || puntoLote(capa);
+    }
+    // Google Maps con origen en su ubicación actual (sin ubicación, Maps usa la del celular)
+    function urlComoLlegar(dest) {
+        return 'https://www.google.com/maps/dir/?api=1' + (miPos ? '&origin=' + miPos.lat.toFixed(6) + ',' + miPos.lng.toFixed(6) : '') +
+            '&destination=' + dest.lat.toFixed(6) + ',' + dest.lng.toFixed(6) + '&travelmode=driving';
+    }
+    // El enlace se arma al tocarlo: así usa la ubicación de ese momento aunque la ficha lleve rato abierta
+    var capaFicha = null;
+    document.addEventListener('click', function (ev) {
+        var a = ev.target.closest && ev.target.closest('a[data-ir]');
+        if (a && capaFicha) a.href = urlComoLlegar(puntoCercano(capaFicha));
+    }, true);
 
     // ---------- Datos ----------
     // Geometría compacta (ver tools/generar_mapa_rapido.js): enteros ×1e6, el primer punto absoluto y luego diferencias
@@ -285,6 +319,7 @@
         var area = Number(String(p.a || '').replace(',', '.'));
         var pt = puntoLote(capa), ll = pt.lat.toFixed(6) + ',' + pt.lng.toFixed(6);
         var u = visitaDeCapa(capa);
+        capaFicha = capa;
         return '<div class="ficha-lote">' +
             '<div class="cab"><span class="titulo">' + (lote ? 'Lote ' + esc(lote) : esc(p.m || 'Lote')) + '</span>' +
                 (p.c ? '<span class="cuad" style="background:' + colorCuadrilla(p.c) + '">Cuadrilla ' + esc(p.c) + '</span>' : '') + '</div>' +
@@ -296,7 +331,7 @@
                 (p.s.length > 140 ? '<span class="mas" data-desc-mas>Ver todo ▾</span>' : '') + '</div>' : '') +
             '<div class="acciones">' +
                 (u && u.ESTADO === 'PENDIENTE' ? '<a class="boton subsanar-btn subs" href="subsanaciones.html?subsanar=' + encodeURIComponent(u.ID) + '">✓ Marcar subsanado</a>' : '') +
-                '<a class="boton primario" href="https://www.google.com/maps/dir/?api=1&destination=' + ll + '" target="_blank" rel="noopener">🧭 Cómo llegar</a>' +
+                '<a class="boton primario" data-ir href="' + esc(urlComoLlegar(puntoCercano(capa))) + '" target="_blank" rel="noopener">🧭 Cómo llegar</a>' +
                 '<a class="boton secundario" href="https://waze.com/ul?ll=' + ll + '&navigate=yes" target="_blank" rel="noopener">Waze</a>' +
                 '<a class="boton secundario subs" href="subsanaciones.html?mr=' + encodeURIComponent(p.m || '') + '&lote=' + encodeURIComponent(lote) + '">📋 Registrar subsanación</a>' +
             '</div></div>';
