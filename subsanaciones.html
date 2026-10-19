@@ -36,6 +36,7 @@
     .filtros { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
     .filtros input, .filtros select { min-height: 38px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font: inherit; background: #fff; color: var(--ink); }
     .filtros input { flex: 1; min-width: 200px; }
+    .filtros #btn-resumen { min-height: 38px; }
     .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -322,6 +323,7 @@
         </select>
         <select id="f-zona" aria-label="Zona"><option value="">Zona: todas</option></select>
         <select id="f-cuadrilla" aria-label="Cuadrilla"><option value="">Cuadrilla: todas</option></select>
+        <button type="button" class="secundario" id="btn-resumen" title="Texto con todas las novedades pendientes de lo filtrado, para pegar en WhatsApp">📋 Copiar resumen</button>
     </div>
     <div class="panel"><div id="tabla"><div class="cargando">Cargando…</div></div></div>
 </main>
@@ -788,6 +790,46 @@
             (r.MICRORRUTA || '') + (r.LOTE ? ' (' + r.LOTE + ')' : '') + '\n' +
             lineas.join('\n');
     }
+    // Resumen de todas las novedades pendientes de lo filtrado, por tipo y cuadrilla:
+    // "Novedades posoperación cuadrilla 4 \n\n Z1CC0096 lote 106 \n * No realizado"
+    function lineasNovedad(r) {
+        var obs = String(r['OBSERVACIONES NOVEDADES'] || '').trim();
+        var lineas = norm(obs).indexOf(NO_REALIZADO) !== -1 ? [] : itemsEnNo(r).map(function (i) { return '* ' + frase(i); });
+        // "LOTE NO REALIZADO" queda "* No realizado" (el lote ya va en el renglón de arriba)
+        if (obs && norm(obs) !== 'SIN NOVEDAD') lineas.push('* ' + frase(obs.replace(/^lote\s+(?=no realizado)/i, '')));
+        return lineas;
+    }
+    function textoResumen(lista) {
+        var grupos = {}, orden = [];
+        lista.forEach(function (r) {
+            var cuad = String(r.CUADRILLA || '').trim().replace(/^C\s*/i, '');
+            var k = (esOp(r) ? '1' : '0') + '|' + cuad;
+            if (!grupos[k]) { grupos[k] = { op: esOp(r), cuad: cuad, rs: [] }; orden.push(k); }
+            grupos[k].rs.push(r);
+        });
+        orden.sort(function (a, b) {
+            var x = grupos[a], y = grupos[b];
+            return (x.op - y.op) || (x.cuad ? 0 : 1) - (y.cuad ? 0 : 1) || x.cuad.localeCompare(y.cuad, 'es', { numeric: true });
+        });
+        return orden.map(function (k) {
+            var g = grupos[k];
+            var titulo = 'Novedades ' + (g.op ? 'en operación' : 'posoperación') + (g.cuad ? ' cuadrilla ' + g.cuad : '');
+            var lotes = g.rs.slice().sort(function (a, b) {
+                return String(a.MICRORRUTA || '').localeCompare(String(b.MICRORRUTA || ''), 'es', { numeric: true });
+            }).map(function (r) {
+                return [r.MICRORRUTA, r.LOTE ? 'lote ' + r.LOTE : ''].filter(Boolean).join(' ') + '\n\n' + lineasNovedad(r).join('\n');
+            });
+            return titulo + '\n\n' + lotes.join('\n\n');
+        }).join('\n\n\n');
+    }
+    $('btn-resumen').onclick = function () {
+        var lista = filtrados().filter(function (r) { return r.ESTADO === 'PENDIENTE'; });
+        if (!lista.length) return toast('No hay novedades pendientes en lo filtrado.');
+        $('wa-texto').value = textoResumen(lista);
+        actualizarEnlaceWa();
+        $('dlg-wa').showModal();
+        toast(lista.length + (lista.length === 1 ? ' visita pendiente' : ' visitas pendientes') + ' en el resumen.');
+    };
     function actualizarEnlaceWa() { $('wa-abrir').href = 'https://wa.me/?text=' + encodeURIComponent($('wa-texto').value); }
     function mostrarWhatsapp(r) {
         $('wa-texto').value = textoWhatsapp(r);
