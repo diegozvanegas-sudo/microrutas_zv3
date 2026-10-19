@@ -47,6 +47,14 @@
     .e-PENDIENTE { color: var(--pend); background: var(--pend-bg); }
     .e-SUBSANADO { color: var(--ok); background: var(--ok-bg); }
     .e-SIN-NOVEDAD { color: var(--sn); background: var(--sn-bg); }
+    .e-CERRADO { color: #334155; background: #e2e8f0; }
+    .lote-cerrado { color: #334155; background: #e2e8f0; }
+    /* Aviso de visita reciente según la frecuencia del lote */
+    .reciente { grid-column: 1 / -1; padding: 9px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45; background: #f1f5f9; color: #475569; }
+    .reciente.alerta { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+    .reciente.alerta b { color: #7c2d12; }
+    .detalle .fila-btn { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .detalle .fila-btn .peligro { padding: 11px 14px; }
     .chip { display: inline-block; margin: 0 4px 4px 0; padding: 2px 8px; border-radius: 6px; font-size: 12px; color: var(--pend); background: var(--pend-bg); }
     .sub { font-size: 12px; color: var(--muted); }
     .aviso { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; line-height: 1.5; }
@@ -261,7 +269,7 @@
     <div class="filtros">
         <input type="search" id="f-texto" placeholder="Buscar por microrruta, lote, interventor, observaciones…">
         <select id="f-estado" aria-label="Estado">
-            <option value="">Estado: todos</option><option value="PENDIENTE">Pendiente</option><option value="SUBSANADO">Subsanado</option><option value="SIN NOVEDAD">Sin novedad</option>
+            <option value="">Estado: todos</option><option value="PENDIENTE">Pendiente</option><option value="SUBSANADO">Subsanado</option><option value="SIN NOVEDAD">Sin novedad</option><option value="CERRADO">Lote cerrado</option>
         </select>
         <select id="f-zona" aria-label="Zona"><option value="">Zona: todas</option></select>
         <select id="f-cuadrilla" aria-label="Cuadrilla"><option value="">Cuadrilla: todas</option></select>
@@ -283,6 +291,7 @@
             </div>
             <label>ÁREA M2 <input data-campo="ÁREA M2"></label>
             <div class="direccion sub" id="dlg-direccion"></div>
+            <div class="reciente" id="dlg-reciente" hidden></div>
             <label>ZONA <input data-campo="ZONA"></label>
             <label>CUADRILLA <input data-campo="CUADRILLA"></label>
             <label class="doble">INTERVENTOR <input data-campo="INTERVENTOR" placeholder="Iniciales"></label>
@@ -294,6 +303,7 @@
                 <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap">
                     <button type="button" class="secundario pequeno" id="todo-si">Marcar todos SI</button>
                     <button type="button" class="pequeno no-realizado" id="no-realizado">✗ Lote no realizado</button>
+                    <button type="button" class="pequeno lote-cerrado" id="lote-cerrado">🔒 Lote cerrado</button>
                 </div>
             </fieldset>
             <label class="ancho">OBSERVACIONES NOVEDADES <textarea data-campo="OBSERVACIONES NOVEDADES" placeholder="SIN NOVEDAD"></textarea></label>
@@ -423,13 +433,19 @@
         var porNorm = {};
         Object.keys(r).forEach(function (k) { porNorm[norm(k)] = r[k]; });
         FIJAS.concat(items).forEach(function (c) { if (porNorm[norm(c)] !== undefined) r[c] = porNorm[norm(c)]; });
+        // Un Apps Script sin actualizar guarda el lote cerrado como SIN NOVEDAD
+        if (r.ESTADO === 'SIN NOVEDAD' && esCerrado(r)) r.ESTADO = 'CERRADO';
         return r;
     }
 
     // ---------- Estado (el servidor lo recalcula al guardar) ----------
+    var NO_REALIZADO = 'LOTE NO REALIZADO', CERRADO = 'LOTE CERRADO';
     function itemsEnNo(r) { return items.filter(function (i) { return valorItem(r[i]) === 'NO'; }); }
+    function esCerrado(r) { return norm(r['OBSERVACIONES NOVEDADES']).indexOf(CERRADO) !== -1; }
+    // Lote cerrado: no se pudo entrar a revisarlo (ítems en N/A); no cuenta como sin novedad
     function calcularEstado(r, anterior) {
         if (itemsEnNo(r).length) return 'PENDIENTE';
+        if (esCerrado(r)) return 'CERRADO';
         return (anterior === 'PENDIENTE' || anterior === 'SUBSANADO') ? 'SUBSANADO' : 'SIN NOVEDAD';
     }
     function badge(estado) { return estado ? '<span class="estado e-' + estado.replace(/ /g, '-') + '">' + esc(estado) + '</span>' : ''; }
@@ -549,9 +565,49 @@
             dato('Observación subsanación', esc(r['OBSERVACIÓN SUBSANACIÓN']), true) +
             dato('Evidencia', /^https?:\/\//i.test(r.EVIDENCIA || '') ? '<a href="' + esc(r.EVIDENCIA) + '" target="_blank" rel="noopener">Abrir fotos</a>' : esc(r.EVIDENCIA), true) +
             '</dl>' + (r.ESTADO === 'PENDIENTE' ? '<button type="button" class="subsanar' + (conEditar ? '' : ' pequeno') + '" data-subsanar="' + esc(r.ID) + '">✓ Marcar subsanado</button>' : '') +
-            (conEditar ? '<button type="button" class="primario editar" data-editar="' + esc(r.ID) + '">Editar</button>' : '') +
-            (enNo.length ? '<button type="button" class="wa' + (conEditar ? ' wa-btn' : ' pequeno') + '" data-wa="' + esc(r.ID) + '">Resumen WhatsApp</button>' : '') + '</div>';
+            (conEditar ? '<div class="fila-btn"><button type="button" class="primario editar" data-editar="' + esc(r.ID) + '">Editar</button>' +
+                '<button type="button" class="peligro" data-eliminar="' + esc(r.ID) + '">🗑 Eliminar</button></div>' : '') +
+            (enNo.length ? '<button type="button" class="wa' + (conEditar ? ' wa-btn' : ' pequeno') + '" data-wa="' + esc(r.ID) + '">Resumen WhatsApp</button>' : '') +
+            (conEditar ? '' : ' <button type="button" class="peligro pequeno" data-eliminar="' + esc(r.ID) + '" style="margin-top:8px">🗑 Eliminar</button>') + '</div>';
     }
+
+    // Pide confirmación y borra la fila de la hoja. Devuelve true si se eliminó.
+    function eliminar(id) {
+        var r = registros.find(function (x) { return x.ID === id; });
+        if (!r) return Promise.resolve(false);
+        var nombre = r.LOTE ? 'del lote ' + r.LOTE : 'de ' + (r.MICRORRUTA || id);
+        if (!confirm('¿Eliminar la visita ' + nombre + ' del ' + (r['FECHA DE LA VISITA'] || '—') + ' (' + id + ')?\nSe borrará la fila de la hoja.')) return Promise.resolve(false);
+        return enviar('eliminar', { id: id }).then(function () {
+            registros = registros.filter(function (x) { return x.ID !== id; });
+            delete abiertos[id];
+            pintar();
+            toast('Eliminado ' + id);
+            return true;
+        });
+    }
+
+    // ---------- Visita reciente según la frecuencia (Mensual = 30 días, Quincenal = 15) ----------
+    var PERIODO = { MENSUAL: 30, QUINCENAL: 15 };
+    function deClave(k) { return new Date(k.slice(0, 4) + '-' + k.slice(4, 6) + '-' + k.slice(6, 8)); }
+    // Última visita del lote en o antes de la fecha ref (aaaa-mm-dd), sin contar la que se está editando
+    function visitaReciente(mr, lote, excluir, ref) {
+        lote = lote && lote !== 'NA' ? String(lote).trim() : '';
+        mr = String(mr || '').trim().toUpperCase();
+        if (!lote && !mr) return null;
+        var kRef = String(ref || hoy()).replace(/-/g, '');
+        var u = registros.find(function (r) {
+            if (r.ID === excluir) return false;
+            var mismo = lote ? String(r.LOTE || '').trim() === lote : String(r.MICRORRUTA || '').trim().toUpperCase() === mr;
+            var k = claveFecha(r['FECHA DE LA VISITA']);
+            return mismo && k && k <= kRef;
+        });
+        if (!u) return null;
+        var p = LOTES[mr] || LOTES[mrPorLote[lote]] || {}, periodo = PERIODO[norm(p.frec)] || 0;
+        var k = claveFecha(u['FECHA DE LA VISITA']), d = Math.round((deClave(kRef) - deClave(k)) / 864e5);
+        var toca = periodo ? new Date(deClave(k).getTime() + periodo * 864e5).toISOString().slice(0, 10) : '';
+        return { r: u, d: d, frec: p.frec || '', periodo: periodo, toca: toca, reciente: periodo ? d < periodo : d < 15 };
+    }
+    function textoDias(d) { return d === 0 ? 'hoy' : d === 1 ? 'ayer' : 'hace ' + d + ' días'; }
 
     // ---------- Resumen para WhatsApp ----------
     function frase(s) { s = String(s || '').trim().toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -614,7 +670,24 @@
         // target _blank: no perder lo que se lleva escrito en el formulario
         $('dlg-direccion').innerHTML = p ? (p.d ? 'Dirección: ' + esc(p.d) + ' · ' : '') +
             '<a class="enlace-mapa" target="_blank" rel="noopener" href="' + esc(urlMapa(mr, p.lote)) + '">Ver en mapa ›</a>' : '';
+        mostrarReciente();
     }
+    // "Este lote fue visitado hace 8 días": compara con la frecuencia para saber si ya le toca otra visita
+    function mostrarReciente() {
+        var el = $('dlg-reciente'), val = function (c) { return form.querySelector('[data-campo="' + c + '"]').value; };
+        var v = visitaReciente(val('MICRORRUTA'), val('LOTE'), editando ? editando.ID : null, val('FECHA DE LA VISITA'));
+        el.hidden = !v;
+        if (!v) return;
+        var u = v.r, frec = v.frec ? 'Frecuencia ' + esc(v.frec.toLowerCase()) : '';
+        var datos = esc(u['FECHA DE LA VISITA']) + ' ' + badge(u.ESTADO) + (u.INTERVENTOR ? ' · ' + esc(u.INTERVENTOR) : '');
+        el.className = 'reciente' + (v.reciente ? ' alerta' : '');
+        el.innerHTML = v.d === 0
+            ? '⚠ <b>Este lote ya tiene una visita registrada ' + (editando ? 'ese día' : 'hoy') + '</b> (' + datos + '). Revise que no la esté registrando dos veces.'
+            : v.reciente
+                ? '⚠ <b>Visitado ' + textoDias(v.d) + '</b> (' + datos + ').' + (frec ? ' ' + frec + ': le vuelve a tocar desde el ' + esc(aTexto(v.toca)) + '.' : '')
+                : 'Última visita ' + textoDias(v.d) + ' (' + datos + ').' + (frec ? ' ' + frec + ': ya le toca.' : '');
+    }
+    form.querySelector('[data-campo="FECHA DE LA VISITA"]').addEventListener('change', mostrarReciente);
     // registros va de la visita más reciente a la más antigua
     function ultimoValor(campo) { var r = registros.find(function (x) { return String(x[campo] || '').trim(); }); return r ? String(r[campo]).trim() : ''; }
     function abrir(r, contexto) {
@@ -691,32 +764,32 @@
     });
 
     $('btn-eliminar').onclick = function () {
-        if (!editando || !confirm('¿Eliminar ' + editando.ID + '? Se borrará la fila de la hoja.')) return;
+        if (!editando) return;
         ocupado(true);
-        var id = editando.ID;
-        enviar('eliminar', { id: id }).then(function () {
-            registros = registros.filter(function (x) { return x.ID !== id; });
-            dlg.close();
-            pintar();
-            toast('Eliminado ' + id);
-        }).catch(function (err) { toast('No se eliminó: ' + err.message); })
-          .then(function () { ocupado(false); });
+        eliminar(editando.ID).then(function (ok) { if (ok) dlg.close(); })
+            .catch(function (err) { toast('No se eliminó: ' + err.message); })
+            .then(function () { ocupado(false); });
     };
     $('btn-cancelar').onclick = function () { dlg.close(); };
     $('todo-si').onclick = function () {
         items.forEach(function (it, i) { var el = $('it' + i + 'si'); if (el) el.checked = true; });
         actualizarEstadoForm();
     };
-    // La cuadrilla no ejecutó el lote: todo en NO y la observación lo dice (queda PENDIENTE)
-    var NO_REALIZADO = 'LOTE NO REALIZADO';
-    $('no-realizado').onclick = function () {
-        items.forEach(function (it, i) { var el = $('it' + i + 'no'); if (el) el.checked = true; });
+    // Marca todos los ítems con un valor y pone el motivo al inicio de la observación (cambia uno por el otro si ya estaba)
+    function marcarLote(valor, motivo) {
+        items.forEach(function (it, i) { var el = $('it' + i + valor); if (el) el.checked = true; });
         var obs = form.querySelector('[data-campo="OBSERVACIONES NOVEDADES"]');
-        if (norm(obs.value).indexOf(NO_REALIZADO) === -1) obs.value = NO_REALIZADO + (obs.value.trim() && norm(obs.value) !== 'SIN NOVEDAD' ? '. ' + obs.value.trim() : '');
+        var resto = obs.value.trim().replace(/^LOTE (NO REALIZADO|CERRADO)\.?\s*/i, '');
+        obs.value = motivo + (resto && norm(resto) !== 'SIN NOVEDAD' ? '. ' + resto : '');
         actualizarEstadoForm();
         obs.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    };
+    }
+    // La cuadrilla no ejecutó el lote: todo en NO y la observación lo dice (queda PENDIENTE)
+    $('no-realizado').onclick = function () { marcarLote('no', NO_REALIZADO); };
+    // No se pudo entrar al lote: todo en N/A y queda CERRADO (cuenta como revisado en la pre-ruta)
+    $('lote-cerrado').onclick = function () { marcarLote('na', CERRADO); };
     $('items').addEventListener('change', actualizarEstadoForm);
+    form.querySelector('[data-campo="OBSERVACIONES NOVEDADES"]').addEventListener('input', actualizarEstadoForm);
 
     // Autocompletar con la programación de microrrutas (data/direcciones_lotes.js)
     var mrPorLote = {};
@@ -832,6 +905,7 @@
     form.querySelector('[data-campo="LOTE"]').addEventListener('change', function () {
         var mrEl = form.querySelector('[data-campo="MICRORRUTA"]');
         if (!mrEl.value && mrPorLote[this.value.trim()]) completar(mrPorLote[this.value.trim()]);
+        else mostrarReciente();
     });
 
     // Desde el mapa: subsanaciones.html?mr=Z2CC0067&lote=264
@@ -845,8 +919,13 @@
         try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
         $('f-texto').value = mr || lote;
         pintar();
-        abrir({ MICRORRUTA: mr, LOTE: lote });
-        if (mr) completar(mr); else if (mrPorLote[lote]) completar(mrPorLote[lote]);
+        // Si el lote está en los lotes a revisar, llega con los datos de esa parada (cuadrilla, fecha de ejecución)
+        var enRuta = paradaDe(mr, lote);
+        if (enRuta) registrarParada(enRuta.ri, enRuta.id);
+        else {
+            abrir({ MICRORRUTA: mr, LOTE: lote });
+            if (mr) completar(mr); else if (mrPorLote[lote]) completar(mrPorLote[lote]);
+        }
         // Al cerrar el formulario se quita el filtro de ese lote y queda la lista completa
         dlg.addEventListener('close', function () { if ($('f-texto').value === (mr || lote)) { $('f-texto').value = ''; pintar(); } }, { once: true });
     }
@@ -1042,7 +1121,13 @@
             var proximas = pend.filter(function (x) { return x.c; }).slice(0, 4); // Google Maps en el celular admite 3 paradas + destino
             var gmaps = proximas.length ? 'https://www.google.com/maps/dir/?api=1&destination=' + proximas[proximas.length - 1].c.join(',') +
                 (proximas.length > 1 ? '&waypoints=' + encodeURIComponent(proximas.slice(0, -1).map(function (x) { return x.c.join(','); }).join('|')) : '') + '&travelmode=driving' : '';
-            var conLote = paradas.filter(function (x) { return x.lote; }).map(function (x) { return x.lote; });
+            // "Ver todos en el mapa": el mapa pinta de otro color los ya revisados y los cerrados
+            var enMapa = paradas.filter(function (x) { return x.lote || x.mr; });
+            var idMapa = function (x) { return x.lote || x.mr; };
+            var cerrada = function (x) { return x.visita && x.visita.ESTADO === 'CERRADO'; };
+            var urlTodos = enMapa.length ? 'mapa_rapido.html?lote=' + enMapa.map(idMapa).join(',') +
+                '&hechos=' + enMapa.filter(function (x) { return x.visita && !cerrada(x); }).map(idMapa).join(',') +
+                '&cerrados=' + enMapa.filter(cerrada).map(idMapa).join(',') : '';
             var prev = posicion, prevUsted = !!posicion;
             var plegada = !!plegadas[ruta.cuad || ''];
             return '<div class="ruta-card' + (plegada ? ' plegada' : '') + '">' +
@@ -1056,14 +1141,17 @@
                 '<div class="ruta-acciones">' +
                     (pend.length > 1 ? '<button type="button" class="secundario pequeno" data-ruta="ordenar" data-ri="' + ri + '">📍 Ordenar desde mi ubicación</button>' : '') +
                     (gmaps ? '<a class="boton primario pequeno" target="_blank" rel="noopener" href="' + esc(gmaps) + '">Ruta en Google Maps' + (pend.length > proximas.length ? ' (próximos ' + proximas.length + ')' : '') + '</a>' : '') +
-                    (conLote.length ? '<a class="boton secundario pequeno" href="' + esc('mapa_rapido.html?lote=' + conLote.join(',')) + '">Ver todos en el mapa</a>' : '') +
+                    (urlTodos ? '<a class="boton secundario pequeno" href="' + esc(urlTodos) + '">Ver todos en el mapa</a>' : '') +
                 '</div>' +
                 '<ol class="paradas">' + paradas.map(function (x, i) {
                     var dist = prev && x.c ? textoDist(metros(prev, x.c)) + (prevUsted ? ' de usted' : ' de la anterior') : '';
                     if (x.c) { prev = x.c; prevUsted = false; }
                     var aviso = !x.mr ? 'No está en la programación' : ruta.cuad && x.cuad && x.cuad !== ruta.cuad ? 'Programado para la cuadrilla ' + x.cuad : '';
+                    // Pendiente pero visitado hace poco (antes de esta pre-ruta): se avisa según la frecuencia
+                    var rec = !x.visita && visitaReciente(x.mr, x.lote, null, hoy());
+                    if (rec && rec.reciente) aviso = (aviso ? aviso + ' · ' : '') + 'Visitado ' + textoDias(rec.d) + (rec.frec ? ' (frecuencia ' + rec.frec.toLowerCase() + ')' : '');
                     return '<li class="parada' + (x.visita ? ' hecha' : x === sig ? ' siguiente' : '') + '">' +
-                        '<span class="n">' + (x.visita ? '✓' : i + 1) + '</span>' +
+                        '<span class="n">' + (x.visita ? (cerrada(x) ? '🔒' : '✓') : i + 1) + '</span>' +
                         '<div class="info"><div class="titulo"><b>' + esc(x.lote ? 'Lote ' + x.lote : x.mr) + '</b>' +
                             (x.lote && x.mr ? ' <span class="sub">' + esc(x.mr) + '</span>' : '') +
                             (fechas.length > 1 && x.fecha ? ' <span class="sub">· ejec. ' + esc(aTexto(x.fecha).slice(0, 5)) + '</span>' : '') +
@@ -1103,22 +1191,9 @@
             rutas.splice(+b.dataset.ri, 1); guardarRutas(); subirRuta({ cuad: ruta.cuad, paradas: [] }); return pintarRutas();
         }
         if (accion === 'registrar') {
-            var ri = +b.dataset.ri, x = infoLote(b.dataset.id);
-            var n = ruta.paradas.findIndex(function (p) { return p.id === b.dataset.id; }), parada = ruta.paradas[n] || {};
-            var registrar = function () {
-                abrir({ MICRORRUTA: x.mr, LOTE: x.lote, CUADRILLA: ruta.cuad, 'FECHA DE EJECUCIÓN': aTexto(parada.fecha || '') }, {
-                    ri: ri,
-                    html: '📍 Pre-ruta' + (ruta.cuad ? ' cuadrilla ' + esc(ruta.cuad) : '') + ' · parada ' + (n + 1) + ' de ' + ruta.paradas.length + '<br>' +
-                        '<b>' + esc(x.lote ? 'Lote ' + x.lote : x.mr) + '</b>' + (x.lote && x.mr ? ' · ' + esc(x.mr) : '') +
-                        (parada.fecha ? ' · ejecutado ' + esc(aTexto(parada.fecha)) : '') + (x.d ? '<br>' + esc(x.d) : '') +
-                        fichaLote(x)
-                });
-                if (x.mr) completar(x.mr);
-                // completar() pone la cuadrilla de la programación; se respeta la del mensaje si vino
-                if (ruta.cuad) form.querySelector('[data-campo="CUADRILLA"]').value = ruta.cuad;
-            };
-            if (cargado || !CFG.url) return registrar();
-            alCargar = registrar;
+            var ri = +b.dataset.ri, id = b.dataset.id;
+            if (cargado || !CFG.url) return registrarParada(ri, id);
+            alCargar = function () { registrarParada(ri, id); };
             toast('Cargando la hoja… el formulario se abre en un momento.');
             return;
         }
@@ -1136,6 +1211,35 @@
             }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
         }
     };
+
+    // Abre el formulario con los datos de la parada: cuadrilla y fecha de ejecución del mensaje, ficha y última visita
+    function registrarParada(ri, id) {
+        var ruta = rutas[ri], x = infoLote(id);
+        var n = ruta.paradas.findIndex(function (p) { return p.id === id; }), parada = ruta.paradas[n] || {};
+        abrir({ MICRORRUTA: x.mr, LOTE: x.lote, CUADRILLA: ruta.cuad, 'FECHA DE EJECUCIÓN': aTexto(parada.fecha || '') }, {
+            ri: ri,
+            html: '📍 Pre-ruta' + (ruta.cuad ? ' cuadrilla ' + esc(ruta.cuad) : '') + ' · parada ' + (n + 1) + ' de ' + ruta.paradas.length + '<br>' +
+                '<b>' + esc(x.lote ? 'Lote ' + x.lote : x.mr) + '</b>' + (x.lote && x.mr ? ' · ' + esc(x.mr) : '') +
+                (parada.fecha ? ' · ejecutado ' + esc(aTexto(parada.fecha)) : '') + (x.d ? '<br>' + esc(x.d) : '') +
+                fichaLote(x)
+        });
+        if (x.mr) completar(x.mr);
+        // completar() pone la cuadrilla de la programación; se respeta la del mensaje si vino
+        if (ruta.cuad) form.querySelector('[data-campo="CUADRILLA"]').value = ruta.cuad;
+    }
+    // Lote que llega desde el mapa: ¿está en alguna pre-ruta? Se prefiere la parada aún sin revisar
+    function paradaDe(mr, lote) {
+        lote = /^\d+$/.test(lote) ? String(+lote) : String(lote || '').trim().toUpperCase();
+        mr = String(mr || '').trim().toUpperCase();
+        var halladas = [];
+        rutas.forEach(function (ruta, ri) {
+            ruta.paradas.forEach(function (p) {
+                var x = infoLote(p.id);
+                if ((lote && lote !== 'NA' && p.id === lote) || (mr && (p.id === mr || x.mr === mr))) halladas.push({ ri: ri, id: p.id, hecha: !!visitaDe(p, x) });
+            });
+        });
+        return halladas.find(function (h) { return !h.hecha; }) || halladas[0] || null;
+    }
 
     function abrirDlgRuta() {
         ['ruta-texto', 'ruta-fecha', 'ruta-cuad'].forEach(function (id) { $(id).value = ''; });
@@ -1202,6 +1306,12 @@
         if (s) return subsanar(registros.find(function (r) { return r.ID === s.dataset.subsanar; }));
         var w = ev.target.closest('[data-wa]');
         if (w) return mostrarWhatsapp(registros.find(function (r) { return r.ID === w.dataset.wa; }));
+        var el = ev.target.closest('[data-eliminar]');
+        if (el) {
+            el.disabled = true;
+            return eliminar(el.dataset.eliminar).catch(function (err) { toast('No se eliminó: ' + err.message); })
+                .then(function () { el.disabled = false; });
+        }
         var v = ev.target.closest('[data-ver]');
         if (v) {
             var abierto = abiertos[v.dataset.ver] = !abiertos[v.dataset.ver];
