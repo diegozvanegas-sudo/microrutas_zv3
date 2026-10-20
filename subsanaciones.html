@@ -534,6 +534,9 @@
         Object.keys(r).forEach(function (k) { porNorm[norm(k)] = r[k]; });
         FIJAS.concat(items, itemsOp).forEach(function (c) { if (porNorm[norm(c)] !== undefined) r[c] = porNorm[norm(c)]; });
         r.TIPO = esOp(r) ? OP : EJ;
+        // La hoja guarda "PENDIENTE POR SUBSANAR - nota" / "NOVEDAD SUBSANADA EL fecha - nota": aquí solo se muestra la nota
+        // (al guardar, el Apps Script vuelve a ponerle el estado)
+        if (r['OBSERVACIONES NOVEDADES'] !== undefined) r['OBSERVACIONES NOVEDADES'] = limpiarObs(r['OBSERVACIONES NOVEDADES']);
         // Un Apps Script sin actualizar guarda el lote cerrado como SIN NOVEDAD
         if (r.ESTADO === 'SIN NOVEDAD' && esCerrado(r)) r.ESTADO = 'CERRADO';
         return r;
@@ -541,6 +544,13 @@
 
     // ---------- Estado (el servidor lo recalcula al guardar) ----------
     var NO_REALIZADO = 'LOTE NO REALIZADO', CERRADO = 'LOTE CERRADO';
+    function limpiarObs(s) {
+        var re = /^(PENDIENTE POR SUBSANAR|NOVEDAD SUBSANADA(\s+EL\s+\d{1,2}\/\d{1,2}\/\d{4})?|SIN NOVEDAD)\s*(-\s*)?/i, antes;
+        s = String(s == null ? '' : s).trim();
+        do { antes = s; s = s.replace(re, '').trim(); } while (s !== antes);
+        return s;
+    }
+    function loteNoRevisable(r) { var n = norm(r['OBSERVACIONES NOVEDADES']); return n.indexOf(CERRADO) !== -1 || n.indexOf(NO_REALIZADO) !== -1; }
     function itemsEnNo(r) { return itemsDe(r).filter(function (i) { return valorItem(r[i]) === 'NO'; }); }
     // Ítems que estuvieron en NO y ya se corrigieron (los anota el Apps Script al subsanar)
     function itemsSubsanados(r) {
@@ -1855,13 +1865,15 @@
     // Una hoja por tipo de visita, con lo que esté filtrado. Encabezados verdes (datos) y azules (ítems);
     // NO pendiente en amarillo, NO ya subsanado en verde, y la observación con el mismo color.
     // ExcelJS (permite colores) se carga solo al pedirlo.
-    var XL = { verde: 'FF00B050', azul: 'FF9BC2E6', amarillo: 'FFFFFF00', verdeNo: 'FF00FF00', gris: 'FFD9D9D9' };
+    var XL = { verde: 'FF00B050', azul: 'FF9BC2E6', amarillo: 'FFFFFF00', verdeNo: 'FF00FF00', gris: 'FFD9D9D9', rojo: 'FFFF0000' };
+    // Igual que la hoja: lote cerrado / no realizado tal cual (en rojo), si no el estado con la fecha de subsanación al lado
     function textoObservacion(r) {
-        var obs = String(r['OBSERVACIONES NOVEDADES'] || '').trim(), n = norm(obs), sinNov = !obs || n === 'SIN NOVEDAD';
-        if (r.ESTADO === 'SUBSANADO') return n.indexOf('SUBSANAD') !== -1 ? obs
-            : 'NOVEDAD SUBSANADA' + (r['FECHA SUBSANACIÓN'] ? ' EL ' + r['FECHA SUBSANACIÓN'] : '') + (sinNov ? '' : ' - ' + obs);
-        if (r.ESTADO === 'PENDIENTE') return n.indexOf('PENDIENTE') !== -1 ? obs : 'PENDIENTE POR SUBSANAR' + (sinNov ? '' : ' - ' + obs);
-        return obs || 'SIN NOVEDAD';
+        var obs = String(r['OBSERVACIONES NOVEDADES'] || '').trim();
+        if (loteNoRevisable(r)) return obs;
+        var nota = limpiarObs(obs), mas = nota ? ' - ' + nota : '';
+        if (r.ESTADO === 'SUBSANADO') return 'NOVEDAD SUBSANADA' + (r['FECHA SUBSANACIÓN'] ? ' EL ' + r['FECHA SUBSANACIÓN'] : '') + mas;
+        if (r.ESTADO === 'PENDIENTE') return 'PENDIENTE POR SUBSANAR' + mas;
+        return nota || 'SIN NOVEDAD';
     }
     function hojaExcel(libro, nombre, lista, op) {
         var its = op ? itemsOp : items;
@@ -1902,7 +1914,8 @@
                     else if (subs.indexOf(c) !== -1) cel.fill = relleno(XL.verdeNo);
                 }
                 if (c === fin[0]) {
-                    if (r.ESTADO === 'PENDIENTE') cel.fill = relleno(XL.amarillo);
+                    if (loteNoRevisable(r)) cel.fill = relleno(XL.rojo);
+                    else if (r.ESTADO === 'PENDIENTE') cel.fill = relleno(XL.amarillo);
                     else if (r.ESTADO === 'SUBSANADO') cel.fill = relleno(XL.verdeNo);
                 }
             });
