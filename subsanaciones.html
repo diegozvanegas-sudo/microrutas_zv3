@@ -166,6 +166,10 @@
     .no-realizado { color: var(--pend); background: var(--pend-bg); }
     .tag-despues { font-size: 11px; font-weight: 700; color: var(--muted); background: #eef2f4; padding: 1px 7px; border-radius: 99px; }
     .tag-sig { font-size: 11px; font-weight: 700; color: #fff; background: var(--brand); padding: 1px 7px; border-radius: 99px; }
+    /* Plazo de visita después de la ejecución (PLAZO_DIAS) */
+    .tag-plazo { font-size: 11px; font-weight: 700; color: #9a3412; background: #ffedd5; padding: 1px 7px; border-radius: 99px; }
+    .tag-plazo.vencido { color: #fff; background: var(--pend); }
+    .plazo-vencido { margin: 8px 14px 0; padding: 7px 10px; border-radius: 10px; background: var(--pend-bg); color: var(--pend); font-size: 13px; border: 1px solid #fca5a5; }
     /* Lote que la cuadrilla está ejecutando ahora (mensaje "inicia labores...") */
     .tag-curso { font-size: 11px; font-weight: 700; color: #fff; background: #2563eb; padding: 1px 7px; border-radius: 99px; }
     .parada.encurso { background: #eff6ff; }
@@ -1542,6 +1546,30 @@
         guardarRutas();
     }
 
+    // Después de la fecha de ejecución hay PLAZO_DIAS para visitar el lote; pasado ese tiempo queda vencido
+    var PLAZO_DIAS = 3;
+    function plazoDe(x) {
+        if (x.visita || x.encurso) return null;
+        var d = dias(x.fecha || x.creada);
+        return d === null ? null : { d: d, resta: PLAZO_DIAS - d };
+    }
+    function textoPlazo(pz) {
+        return pz.resta < 0 ? '⚠ Plazo vencido hace ' + (-pz.resta === 1 ? '1 día' : -pz.resta + ' días')
+            : pz.resta === 0 ? '⏳ Hoy es el último día' : pz.resta === 1 ? '⏳ Vence mañana' : '';
+    }
+    // Ventana de alerta una vez por día y por grupo de lotes vencidos (no cada vez que se repinta con el GPS)
+    function avisarVencidos(vencidos) {
+        if (!vencidos.length) return;
+        var clave = hoy() + '|' + vencidos.map(function (v) { return v.cuad + ':' + v.nombre; }).sort().join(',');
+        try { if (localStorage.getItem('plazo-avisado') === clave) return; } catch (e) {}
+        if (document.querySelector('dialog[open]')) return; // se intenta en el próximo repintado
+        try { localStorage.setItem('plazo-avisado', clave); } catch (e) {}
+        confirmar('⚠ ' + (vencidos.length === 1 ? '1 lote pasó' : vencidos.length + ' lotes pasaron') + ' el plazo de ' + PLAZO_DIAS + ' días',
+            'Después de la fecha de ejecución hay ' + PLAZO_DIAS + ' días para visitar. Sin visita:\n\n' +
+            vencidos.map(function (v) { return '• ' + v.nombre + (v.cuad ? ' (cuadrilla ' + v.cuad + ')' : '') + ' · ejec. ' + aTexto(v.fecha).slice(0, 5) + ' · vencido hace ' + v.vencido + (v.vencido === 1 ? ' día' : ' días'); }).join('\n'),
+            'Entendido');
+    }
+
     function pintarRutas() {
         quitarRevisadas();
         var cont = $('ruta');
@@ -1552,12 +1580,18 @@
         }
         seguirUbicacion();
         pintadaEn = posicion;
+        var vencidos = [];
         cont.innerHTML = rutas.map(function (ruta, ri) {
             var paradas = ruta.paradas.map(function (p) {
-                var x = infoLote(p.id); x.fecha = p.fecha; x.despues = p.despues; x.carga = p.carga; x.visita = visitaDe(p, x); x.encurso = !x.visita && p.encurso;
+                var x = infoLote(p.id); x.fecha = p.fecha; x.creada = p.creada; x.despues = p.despues; x.carga = p.carga; x.visita = visitaDe(p, x); x.encurso = !x.visita && p.encurso;
                 x.du = posicion && puntosDe(String(x.id)).length ? distLotes(posicion, String(x.id)) : null;
+                x.plazo = plazoDe(x);
                 return x;
             });
+            var venc = paradas.filter(function (x) { return x.plazo && x.plazo.resta < 0; });
+            venc.forEach(function (x) { vencidos.push({ cuad: ruta.cuad || '', nombre: x.lote ? 'Lote ' + x.lote : x.mr || x.id, fecha: x.fecha || x.creada, vencido: -x.plazo.resta }); });
+            var avisoPlazo = venc.length ? '<div class="plazo-vencido">⚠ <b>' + (venc.length === 1 ? '1 lote pasó' : venc.length + ' lotes pasaron') + ' el plazo de ' + PLAZO_DIAS + ' días</b> sin visita: ' +
+                esc(venc.map(function (x) { return x.lote ? 'Lote ' + x.lote : x.mr || x.id; }).join(', ')) + '</div>' : '';
             // Parada más cercana a usted; si está a menos de AQUI_M (o dentro del margen del GPS) usted está en ese lote
             var cerca = paradas.reduce(function (a, x) { return x.du !== null && (!a || x.du < a.du) ? x : a; }, null);
             var aqui = cerca && cerca.du <= Math.max(AQUI_M, Math.min(precision, 150)) ? cerca : null;
@@ -1595,7 +1629,7 @@
                                                   : paradas.length + ' por revisar') +
                         (llegada ? ' · 🕒 en orden de llegada' : '') + '</div></div>' +
                     '<button type="button" class="ruta-quitar" data-ruta="quitar" data-ri="' + ri + '" aria-label="Quitar pre-ruta">×</button></div>' +
-                '<div class="progreso"><span style="width:' + Math.round(100 * hechas / paradas.length) + '%"></span></div>' + ubic +
+                '<div class="progreso"><span style="width:' + Math.round(100 * hechas / paradas.length) + '%"></span></div>' + avisoPlazo + ubic +
                 '<div class="ruta-acciones">' +
                     (pend.length > 1 ? (llegada
                         ? '<button type="button" class="secundario pequeno" data-ruta="ordenar" data-ri="' + ri + '">📍 Ordenar por cercanía</button>'
@@ -1624,7 +1658,8 @@
                             (x.encurso ? ' <span class="tag-curso">▶ Cuadrilla trabajando aquí' + (horaCarga(x.encurso) ? ' · desde ' + esc(horaCarga(x.encurso)) : '') + '</span>' : '') +
                             (x === aqui ? ' <span class="tag-aqui">📍 Usted está aquí</span>' : '') +
                             (x === sig ? ' <span class="tag-sig">Siguiente</span>' : '') +
-                            (x.despues && !x.visita ? ' <span class="tag-despues">Para después</span>' : '') + (x.visita ? ' ' + badge(x.visita.ESTADO) : '') + '</div>' +
+                            (x.despues && !x.visita ? ' <span class="tag-despues">Para después</span>' : '') + (x.visita ? ' ' + badge(x.visita.ESTADO) : '') +
+                            (x.plazo && textoPlazo(x.plazo) ? ' <span class="tag-plazo' + (x.plazo.resta < 0 ? ' vencido' : '') + '">' + esc(textoPlazo(x.plazo)) + '</span>' : '') + '</div>' +
                             (x.d ? '<div class="sub dir">' + esc(x.d) + '</div>' : '') +
                             (aviso ? '<div class="sub alerta">' + esc(aviso) + '</div>' : '') +
                             (dist && !x.visita ? '<div class="sub">📍 ' + dist + '</div>' : '') + '</div>' +
@@ -1642,6 +1677,7 @@
                         '</div></li>';
                 }).join('') + '</ol></div>';
         }).join('') + '<button type="button" class="secundario pequeno otra" data-ruta="nueva">+ Otra pre-ruta</button>';
+        avisarVencidos(vencidos);
     }
 
     $('ruta').onclick = function (ev) {

@@ -20,6 +20,11 @@ Qué hace
   en gris (🔒) y los que faltan en rojo con su número de parada.
 - Al registrar, si el lote ya tiene una visita reciente se avisa ("Visitado hace 8 días") según su
   frecuencia de la programación: Quincenal = 15 días, Mensual = 30 días.
+- Plazo de visita: después de la FECHA DE EJECUCIÓN hay 3 días para visitar el lote (PLAZO_DIAS en
+  subsanaciones.html). En la pre-ruta cada lote sin visita muestra "⏳ Vence mañana", "⏳ Hoy es el último día"
+  o "⚠ Plazo vencido hace N días" (rojo); la tarjeta de la cuadrilla lista los vencidos y sale una ventana de
+  alerta (una vez al día por cada grupo de lotes vencidos). Si el mensaje no traía fecha, se cuenta desde el día
+  en que se cargó el lote.
 - "Registrar subsanación" desde el mapa: si el lote está en una pre-ruta, el formulario llega con la
   cuadrilla y la fecha de ejecución de esa parada.
 - Cada visita tiene "🗑 Eliminar" en Ver detalles (pide confirmación).
